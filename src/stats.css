@@ -1,0 +1,850 @@
+:root {
+  --red: #df1921;
+  --red-dark: #a90e15;
+  --red-deep: #7e080e;
+
+  --white: #ffffff;
+
+  --text: #1c1d22;
+  --muted: #71747e;
+
+  --border: #e8e9ed;
+
+  --surface: #f6f6f8;
+}
+
+/* =========================================================
+   GENERAL
+========================================================= */
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+
+  min-height: 100%;
+
+  font-family: Arial, Helvetica, sans-serif;
+
+  background: #f5f5f7;
+
+  color: var(--text);
+}
+
+button,
+input {
+  font: inherit;
+}
+
+button {
+  cursor: pointer;
+}
+
+#app {
+  min-height: 100vh;
+}
+
+/* =========================================================
+   LOGIN
+========================================================= */
+
+.stats-login-page {
+  min-height: 100vh;
+
+  display: flex;
+
+  align-items: center;
+  justify-content: center;
+
+  padding: 25px;
+
+  background: radial-gradient(
+      circle at 85% 8%,
+      rgba(255, 255, 255, 0.15),
+      transparent 28%
+    ),
+    linear-gradient(145deg, #ef3037, var(--red), var(--red-deep));
+}
+
+.stats-login-card {
+  width: min(460px, 100%);
+
+  padding: 34px;
+
+  border-radius: 28px;
+
+  background: white;
+
+  box-shadow: 0 30px 80px rgba(65, 0, 5, 0.28);
+}
+
+.stats-back-link {
+  display: inline-block;
+
+  margin-bottom: 30px;
+
+  color: var(--red);
+
+  text-decoration: none;
+
+  font-size: 13px;
+
+  font-weight: 800;
+}
+
+.stats-brand {
+  display: flex;
+
+  align-items: center;
+
+  gap: 13px;
+}
+
+.stats-brand strong,
+.stats-brand small {
+  display: block;
+}
+
+.stats-brand strong {
+  font-size: 18px;
+}
+
+.stats-brand small {
+  margin-top: 3px;
+
+  color: var(--muted);
+
+  font-size: 11px;
+}
+
+/* =========================================================
+   LOGO
+========================================================= */
+
+.stats-logo {
+  width: 42px;
+  height: 42px;
+
+  display: flex;
+
+  align-items: center;
+  justify-content: center;
+
+  gap: 5px;
+
+  border-radius: 12px;
+
+  background: var(--red);
+}
+
+.stats-logo span {
+  width: 8px;
+
+  display: block;
+
+  border-radius: 5px;
+
+  background: white;
+}
+
+.stats-logo span:first-child,
+.stats-logo span:last-child {
+  height: 29px;
+}
+
+.stats-logo span:nth-child(2) {
+  height: 18px;
+}
+
+/* =========================================================
+   LOGIN TEXTO
+========================================================= */
+
+.stats-login-copy {
+  margin-top: 38px;
+}
+
+.stats-login-copy span {
+  color: var(--red);
+
+  font-size: 10px;
+
+  font-weight: 900;
+
+  letter-spacing: 1.3px;
+}
+
+.stats-login-copy h1 {
+  margin: 7px 0 8px;
+
+  font-size: 37px;
+
+  letter-spacing: -1.7px;
+}
+
+.stats-login-copy p {
+  margin: 0;
+
+  color: var(--muted);
+
+  line-height: 1.5;
+}
+
+/* =========================================================
+   FORMULARIO
+========================================================= */
+
+.stats-form {
+  display: grid;
+
+  gap: 17px;
+
+  margin-top: 27px;
+}
+
+.stats-form label {
+  display: grid;
+
+  gap: 7px;
+
+  color: #4b4d55;
+
+  font-size: 12px;
+
+  font-weight: 800;
+}
+
+.stats-form input {
+  width: 100%;
+
+  min-height: 50px;
+
+  padding: 0 14px;
+
+  border: 1px solid #dfe0e5;
+
+  border-radius: 13px;
+
+  outline: none;
+
+  color: var(--text);
+
+  background: #fafafa;
+}
+
+.stats-form input:focus {
+  border-color: var(--red);
+
+  box-shadow: 0 0 0 3px rgba(223, 25, 33, 0.09);
+}
+
+.stats-form button,
+.retry-button {
+  min-height: 52px;
+
+  border: 0;
+
+  border-radius: 14px;
+
+  background: linear-gradient(135deg, #ef3037, var(--red-dark));
+
+  color: white;
+
+  font-weight: 900;
+
+  box-shadow: 0 12px 30px rgba(223, 25, 33, 0.22);
+}
+
+.stats-form button:disabled {
+  opacity: 0.6;
+
+  cursor: wait;
+}
+
+.stats-error {
+  margin-top: 20px;
+
+  padding: 12px;
+
+  border-radius: 12px;
+
+  background: #fff0f1;
+
+  color: var(--red-dark);
+
+  font-size: 12px;
+
+  font-weight: 700;
+}
+
+/* =========================================================
+   CARGANDO
+========================================================= */
+
+.stats-loading {
+  min-height: 100vh;
+
+  display: flex;
+
+  flex-direction: column;
+
+  align-items: center;
+  justify-content: center;
+
+  gap: 15px;
+
+  background: #f6f6f8;
+
+  color: var(--muted);
+}
+
+.loading-circle {
+  width: 35px;
+  height: 35px;
+
+  border: 4px solid #e3e3e7;
+
+  border-top-color: var(--red);
+
+  border-radius: 50%;
+
+  animation: girar 0.8s linear infinite;
+}
+
+@keyframes girar {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* =========================================================
+   PANEL
+========================================================= */
+
+.stats-page {
+  width: min(1380px, calc(100% - 40px));
+
+  margin: 0 auto;
+
+  padding: 35px 0 60px;
+}
+
+/* =========================================================
+   CABECERA
+========================================================= */
+
+.stats-header {
+  display: flex;
+
+  justify-content: space-between;
+
+  gap: 25px;
+
+  padding: 29px 31px;
+
+  border-radius: 25px;
+
+  background: linear-gradient(135deg, #ed2d34, var(--red), var(--red-deep));
+
+  color: white;
+
+  box-shadow: 0 20px 50px rgba(100, 0, 5, 0.19);
+}
+
+.stats-home-link {
+  display: inline-block;
+
+  margin-bottom: 23px;
+
+  color: rgba(255, 255, 255, 0.85);
+
+  text-decoration: none;
+
+  font-size: 12px;
+
+  font-weight: 800;
+}
+
+.stats-kicker {
+  display: block;
+
+  color: rgba(255, 255, 255, 0.75);
+
+  font-size: 10px;
+
+  font-weight: 900;
+
+  letter-spacing: 1.3px;
+}
+
+.stats-header h1 {
+  margin: 5px 0 8px;
+
+  font-size: 42px;
+
+  letter-spacing: -2px;
+}
+
+.stats-header p {
+  margin: 0;
+
+  color: rgba(255, 255, 255, 0.78);
+}
+
+.stats-user {
+  min-width: 230px;
+
+  align-self: center;
+
+  padding: 15px;
+
+  border: 1px solid rgba(255, 255, 255, 0.17);
+
+  border-radius: 17px;
+
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.stats-user small,
+.stats-user strong {
+  display: block;
+}
+
+.stats-user small {
+  color: rgba(255, 255, 255, 0.65);
+
+  font-size: 10px;
+}
+
+.stats-user strong {
+  margin-top: 4px;
+
+  font-size: 12px;
+
+  overflow-wrap: anywhere;
+}
+
+.stats-user button {
+  margin-top: 12px;
+
+  padding: 8px 11px;
+
+  border: 1px solid rgba(255, 255, 255, 0.21);
+
+  border-radius: 9px;
+
+  background: rgba(255, 255, 255, 0.12);
+
+  color: white;
+
+  font-size: 10px;
+
+  font-weight: 800;
+}
+
+/* =========================================================
+   INDICADORES
+========================================================= */
+
+.metrics-grid {
+  display: grid;
+
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+
+  gap: 13px;
+
+  margin-top: 18px;
+}
+
+.metric-card {
+  min-height: 150px;
+
+  display: flex;
+
+  flex-direction: column;
+
+  justify-content: center;
+
+  padding: 21px;
+
+  border: 1px solid var(--border);
+
+  border-radius: 19px;
+
+  background: white;
+
+  box-shadow: 0 8px 25px rgba(35, 35, 45, 0.05);
+}
+
+.metric-card span {
+  color: var(--muted);
+
+  font-size: 11px;
+
+  font-weight: 800;
+}
+
+.metric-card strong {
+  margin-top: 8px;
+
+  color: var(--red);
+
+  font-size: 38px;
+
+  line-height: 1;
+
+  letter-spacing: -1.7px;
+}
+
+.metric-card small {
+  margin-top: 8px;
+
+  color: #9a9ca4;
+
+  font-size: 10px;
+}
+
+/* =========================================================
+   PANELES
+========================================================= */
+
+.stats-main-grid {
+  display: grid;
+
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+
+  gap: 16px;
+
+  margin-top: 17px;
+}
+
+.stats-panel {
+  min-width: 0;
+
+  padding: 23px;
+
+  border: 1px solid var(--border);
+
+  border-radius: 21px;
+
+  background: white;
+
+  box-shadow: 0 8px 28px rgba(35, 35, 45, 0.05);
+}
+
+.stats-panel-wide {
+  grid-column: 1 / -1;
+}
+
+.panel-heading {
+  display: flex;
+
+  align-items: flex-start;
+  justify-content: space-between;
+
+  gap: 15px;
+
+  margin-bottom: 23px;
+}
+
+.panel-heading span {
+  color: var(--red);
+
+  font-size: 9px;
+
+  font-weight: 900;
+
+  letter-spacing: 1.2px;
+}
+
+.panel-heading h2 {
+  margin: 5px 0 0;
+
+  font-size: 20px;
+}
+
+.panel-heading small {
+  color: var(--muted);
+
+  font-size: 10px;
+}
+
+/* =========================================================
+   GRÁFICO DIARIO
+========================================================= */
+
+.daily-chart {
+  min-height: 230px;
+
+  display: flex;
+
+  align-items: flex-end;
+
+  gap: 12px;
+
+  padding: 25px 5px 0;
+
+  overflow-x: auto;
+}
+
+.daily-column {
+  min-width: 50px;
+
+  height: 190px;
+
+  display: flex;
+
+  flex: 1;
+
+  flex-direction: column;
+
+  justify-content: flex-end;
+
+  align-items: center;
+
+  gap: 6px;
+}
+
+.daily-column strong {
+  color: #555760;
+
+  font-size: 10px;
+}
+
+.daily-bar {
+  width: 72%;
+
+  min-height: 8px;
+
+  border-radius: 8px 8px 3px 3px;
+
+  background: linear-gradient(180deg, #ee3138, var(--red-dark));
+}
+
+.daily-column small {
+  color: #92949c;
+
+  font-size: 9px;
+}
+
+/* =========================================================
+   BARRAS
+========================================================= */
+
+.bar-list {
+  display: grid;
+
+  gap: 16px;
+}
+
+.bar-row-top {
+  display: flex;
+
+  justify-content: space-between;
+
+  gap: 14px;
+
+  margin-bottom: 7px;
+}
+
+.bar-row-top span {
+  color: #4c4e56;
+
+  font-size: 12px;
+
+  font-weight: 700;
+}
+
+.bar-row-top strong {
+  color: var(--red);
+
+  font-size: 12px;
+}
+
+.bar-track {
+  height: 8px;
+
+  overflow: hidden;
+
+  border-radius: 999px;
+
+  background: #f0f0f3;
+}
+
+.bar-fill {
+  height: 100%;
+
+  border-radius: 999px;
+
+  background: linear-gradient(90deg, #ef3037, var(--red-dark));
+}
+
+/* =========================================================
+   RANKINGS
+========================================================= */
+
+.ranking-list {
+  display: grid;
+}
+
+.ranking-row {
+  display: grid;
+
+  grid-template-columns:
+    34px
+    1fr;
+
+  align-items: center;
+
+  gap: 11px;
+
+  padding: 12px 0;
+
+  border-bottom: 1px solid #eeeef1;
+}
+
+.ranking-row:last-child {
+  border-bottom: 0;
+}
+
+.ranking-number {
+  width: 30px;
+  height: 30px;
+
+  display: flex;
+
+  align-items: center;
+  justify-content: center;
+
+  border-radius: 9px;
+
+  background: #fff0f1;
+
+  color: var(--red);
+
+  font-size: 11px;
+
+  font-weight: 900;
+}
+
+.ranking-row strong,
+.ranking-row small {
+  display: block;
+}
+
+.ranking-row strong {
+  color: #34353b;
+
+  font-size: 12px;
+}
+
+.ranking-row small {
+  margin-top: 3px;
+
+  color: #92949d;
+
+  font-size: 10px;
+}
+
+/* =========================================================
+   VACÍO
+========================================================= */
+
+.stats-empty {
+  width: 100%;
+
+  padding: 30px 15px;
+
+  border: 1px dashed #d8d9de;
+
+  border-radius: 14px;
+
+  color: var(--muted);
+
+  font-size: 12px;
+
+  text-align: center;
+}
+
+/* =========================================================
+   TABLET
+========================================================= */
+
+@media (max-width: 950px) {
+  .metrics-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .stats-main-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .stats-panel-wide {
+    grid-column: auto;
+  }
+}
+
+/* =========================================================
+   CELULAR
+========================================================= */
+
+@media (max-width: 600px) {
+  .stats-page {
+    width: 100%;
+
+    padding: 0 12px 35px;
+  }
+
+  .stats-header {
+    margin: 0 -12px;
+
+    padding: 24px 18px;
+
+    border-radius: 0 0 25px 25px;
+
+    flex-direction: column;
+  }
+
+  .stats-header h1 {
+    font-size: 35px;
+  }
+
+  .stats-user {
+    width: 100%;
+  }
+
+  .metrics-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+
+    gap: 9px;
+  }
+
+  .metric-card {
+    min-height: 125px;
+
+    padding: 16px;
+  }
+
+  .metric-card strong {
+    font-size: 31px;
+  }
+
+  .stats-panel {
+    padding: 18px;
+  }
+
+  .daily-chart {
+    gap: 8px;
+  }
+
+  .stats-login-page {
+    padding: 14px;
+  }
+
+  .stats-login-card {
+    padding: 27px 20px;
+  }
+}
