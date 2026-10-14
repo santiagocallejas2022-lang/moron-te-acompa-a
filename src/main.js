@@ -1,39 +1,107 @@
-const ruta = window.location.pathname.replace(/\/+$/, '') || '/';
+const ruta =
+  window.location.pathname
+    .replace(/\/+$/, '') || '/';
+
 
 async function iniciarAplicacion() {
+
   /* ==========================================
      ADMIN
   ========================================== */
 
-  if (ruta === '/admin' || ruta === '/estadisticas') {
-    if (ruta === '/estadisticas') {
-      window.history.replaceState({}, '', '/admin');
+  if (
+    ruta === '/admin' ||
+    ruta === '/estadisticas'
+  ) {
+
+    if (
+      ruta === '/estadisticas'
+    ) {
+
+      window.history
+        .replaceState(
+          {},
+          '',
+          '/admin'
+        );
+
     }
 
-    /*
-      Importador masivo.
 
-      Se carga antes del admin y automáticamente
-      agrega el botón "Importar base" cuando
-      entramos a la sección Comercios.
+    /*
+      Primero cargamos el ADMIN.
+
+      Así, aunque el importador tenga
+      algún problema, /admin sigue
+      funcionando.
     */
 
-    await import('./importador.js');
+    await import(
+      './admin.js'
+    );
 
-    await import('./admin.js');
+
+    /*
+      Después intentamos cargar
+      el importador.
+
+      Si falla, mostramos el error
+      en consola pero NO rompemos
+      el panel admin.
+    */
+
+    try {
+
+      await import(
+        './importador.js'
+      );
+
+    } catch (error) {
+
+      console.error(
+        'Error al cargar el importador:',
+        error
+      );
+
+    }
+
 
     return;
+
   }
+
 
   /* ==========================================
      APP PÚBLICA
   ========================================== */
 
-  const { sincronizarComercios } = await import('./supabase-data.js');
+  try {
 
-  await sincronizarComercios();
+    const {
+      sincronizarComercios,
+    } =
+      await import(
+        './supabase-data.js'
+      );
 
-  await import('./app.js');
+
+    await sincronizarComercios();
+
+  } catch (error) {
+
+    console.error(
+      'No se pudieron sincronizar los comercios:',
+      error
+    );
+
+  }
+
+
+  await import(
+    './app.js'
+  );
+
 }
+
 
 iniciarAplicacion();

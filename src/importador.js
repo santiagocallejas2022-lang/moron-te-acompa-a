@@ -1,5 +1,4 @@
 import * as XLSX from 'xlsx';
-
 import './importador.css';
 
 
@@ -24,8 +23,8 @@ const PROGRAMAS = [
     nombre: 'Tarjeta Joven',
     palabras: [
       'joven',
-      'tarjeta joven',
       'jovenes',
+      'tarjeta joven',
     ],
   },
 
@@ -45,8 +44,8 @@ const PROGRAMAS = [
     palabras: [
       'municipal',
       'municipales',
-      'trabajadores municipales',
       'trabajador municipal',
+      'trabajadores municipales',
     ],
   },
 
@@ -56,8 +55,8 @@ const PROGRAMAS = [
     palabras: [
       'plataforma',
       'plataformas',
-      'trabajadores plataforma',
       'trabajadores de plataforma',
+      'trabajadores plataforma',
       'repartidores',
     ],
   },
@@ -74,7 +73,7 @@ const PROGRAMAS = [
 ];
 
 
-const CAMPOS_BASE = [
+const CAMPOS = [
   {
     key: 'nombre',
     label: 'Nombre del comercio',
@@ -179,33 +178,48 @@ const CAMPOS_BASE = [
 ];
 
 
-let archivoActual = null;
+/* =========================================================
+   ESTADO
+========================================================= */
 
-let workbookActual = null;
+const estado = {
 
-let hojaActual = null;
+  archivo: null,
 
-let filasCrudas = [];
+  workbook: null,
 
-let cabeceras = [];
+  hoja: '',
 
-let filaCabecera = 0;
+  filas: [],
 
-let mapeo = {};
+  cabeceras: [],
 
-let modoBeneficios =
-  'filas';
+  filaCabecera: 0,
 
-let mapeoProgramas = {};
+  mapeo: {},
 
-let ultimoAnalisis = null;
+  modo: 'filas',
+
+  mapeoProgramas: {},
+
+  analisis: null,
+
+};
+
+
+let secuenciaId = 1;
+
+
+const nuevoId =
+  prefijo =>
+    `${prefijo}-${Date.now()}-${secuenciaId++}`;
 
 
 /* =========================================================
-   TEXTO
+   NORMALIZACIÓN
 ========================================================= */
 
-function normalizar(
+function norm(
   valor = ''
 ) {
 
@@ -229,24 +243,7 @@ function normalizar(
 }
 
 
-function normalizarTelefono(
-  valor = ''
-) {
-
-  return String(valor)
-    .replace(
-      /\D/g,
-      ''
-    )
-    .replace(
-      /^54/,
-      ''
-    );
-
-}
-
-
-function limpiarValor(
+function limpiar(
   valor
 ) {
 
@@ -266,27 +263,113 @@ function limpiarValor(
 }
 
 
-function escapar(
+function esc(
   valor = ''
 ) {
 
   return String(valor)
+
     .replaceAll(
       '&',
       '&amp;'
     )
+
     .replaceAll(
       '<',
       '&lt;'
     )
+
     .replaceAll(
       '>',
       '&gt;'
     )
+
     .replaceAll(
       '"',
       '&quot;'
+    )
+
+    .replaceAll(
+      "'",
+      '&#039;'
     );
+
+}
+
+
+function tel(
+  valor = ''
+) {
+
+  return String(valor)
+    .replace(
+      /\D/g,
+      ''
+    )
+    .replace(
+      /^54/,
+      ''
+    );
+
+}
+
+
+function numero(
+  valor
+) {
+
+  if (
+    valor === '' ||
+    valor === null ||
+    valor === undefined
+  ) {
+
+    return null;
+
+  }
+
+
+  const n =
+    Number(
+      String(valor)
+        .replace(
+          ',',
+          '.'
+        )
+    );
+
+
+  return Number.isFinite(n)
+    ? n
+    : null;
+
+}
+
+
+function tieneCoordenadas(
+  comercio
+) {
+
+  const lat =
+    numero(
+      comercio.lat
+    );
+
+
+  const lng =
+    numero(
+      comercio.lng
+    );
+
+
+  return (
+    lat !== null &&
+    lng !== null &&
+    lat >= -90 &&
+    lat <= 90 &&
+    lng >= -180 &&
+    lng <= 180
+  );
 
 }
 
@@ -295,16 +378,17 @@ function escapar(
    SIMILITUD
 ========================================================= */
 
-function distanciaLevenshtein(
+function distancia(
   a,
   b
 ) {
 
   const s =
-    normalizar(a);
+    norm(a);
+
 
   const t =
-    normalizar(b);
+    norm(b);
 
 
   if (s === t) {
@@ -329,9 +413,9 @@ function distanciaLevenshtein(
           s.length + 1,
       },
       () =>
-        new Array(
+        Array(
           t.length + 1
-        )
+        ).fill(0)
     );
 
 
@@ -381,9 +465,11 @@ function distanciaLevenshtein(
       matriz[i][j] =
         Math.min(
 
-          matriz[i - 1][j] + 1,
+          matriz[i - 1][j] +
+            1,
 
-          matriz[i][j - 1] + 1,
+          matriz[i][j - 1] +
+            1,
 
           matriz[i - 1][j - 1] +
             costo
@@ -404,16 +490,17 @@ function distanciaLevenshtein(
 }
 
 
-function similitudTexto(
+function similitud(
   a,
   b
 ) {
 
   const x =
-    normalizar(a);
+    norm(a);
+
 
   const y =
-    normalizar(b);
+    norm(b);
 
 
   if (
@@ -431,17 +518,13 @@ function similitudTexto(
   }
 
 
-  const distancia =
-    distanciaLevenshtein(
-      x,
-      y
-    );
-
-
   return Math.max(
     0,
     1 -
-      distancia /
+      distancia(
+        x,
+        y
+      ) /
       Math.max(
         x.length,
         y.length,
@@ -453,43 +536,43 @@ function similitudTexto(
 
 
 /* =========================================================
-   COINCIDENCIA ENTRE COMERCIOS
+   COMPARAR COMERCIOS
 ========================================================= */
 
-function compararComercios(
+function comparar(
   a,
   b
 ) {
 
   const nombre =
-    similitudTexto(
+    similitud(
       a.nombre,
       b.nombre
     );
 
 
   const direccion =
-    similitudTexto(
+    similitud(
       a.direccion,
       b.direccion
     );
 
 
   const localidad =
-    similitudTexto(
+    similitud(
       a.localidad,
       b.localidad
     );
 
 
   const telefonoA =
-    normalizarTelefono(
+    tel(
       a.telefono
     );
 
 
   const telefonoB =
-    normalizarTelefono(
+    tel(
       b.telefono
     );
 
@@ -505,10 +588,10 @@ function compararComercios(
 
   const mismaDireccion =
     Boolean(
-      normalizar(
+      norm(
         a.direccion
       ) &&
-      normalizar(
+      norm(
         b.direccion
       ) &&
       direccion >= 0.96
@@ -517,10 +600,10 @@ function compararComercios(
 
   const mismaLocalidad =
     Boolean(
-      normalizar(
+      norm(
         a.localidad
       ) &&
-      normalizar(
+      norm(
         b.localidad
       ) &&
       localidad >= 0.90
@@ -528,7 +611,8 @@ function compararComercios(
 
 
   let puntaje =
-    nombre * 0.60;
+    nombre *
+    0.60;
 
 
   if (
@@ -537,7 +621,8 @@ function compararComercios(
   ) {
 
     puntaje +=
-      direccion * 0.20;
+      direccion *
+      0.20;
 
   }
 
@@ -548,7 +633,8 @@ function compararComercios(
   ) {
 
     puntaje +=
-      localidad * 0.10;
+      localidad *
+      0.10;
 
   }
 
@@ -557,7 +643,8 @@ function compararComercios(
     mismoTelefono
   ) {
 
-    puntaje += 0.15;
+    puntaje +=
+      0.15;
 
   }
 
@@ -567,7 +654,8 @@ function compararComercios(
     mismaLocalidad
   ) {
 
-    puntaje += 0.10;
+    puntaje +=
+      0.10;
 
   }
 
@@ -584,17 +672,15 @@ function compararComercios(
 
 
   if (
-    mismoTelefono &&
-    nombre >= 0.65
-  ) {
-
-    nivel =
-      'alta';
-
-  } else if (
-    mismaDireccion &&
-    mismaLocalidad &&
-    nombre >= 0.70
+    (
+      mismoTelefono &&
+      nombre >= 0.65
+    ) ||
+    (
+      mismaDireccion &&
+      mismaLocalidad &&
+      nombre >= 0.70
+    )
   ) {
 
     nivel =
@@ -615,29 +701,38 @@ function compararComercios(
 
 
   return {
+
     puntaje,
+
     nivel,
-    mismoTelefono,
-    mismaDireccion,
-    mismaLocalidad,
+
     nombre,
+
     direccion,
+
     localidad,
+
+    mismoTelefono,
+
+    mismaDireccion,
+
+    mismaLocalidad,
+
   };
 
 }
 
 
 /* =========================================================
-   PROGRAMA
+   PROGRAMAS
 ========================================================= */
 
-function normalizarPrograma(
+function programaId(
   valor
 ) {
 
   const texto =
-    normalizar(valor);
+    norm(valor);
 
 
   if (!texto) {
@@ -651,7 +746,10 @@ function normalizarPrograma(
   ) {
 
     if (
-      programa.id === texto
+      norm(
+        programa.id
+      ) ===
+      texto
     ) {
 
       return programa.id;
@@ -663,7 +761,7 @@ function normalizarPrograma(
       programa.palabras.some(
         palabra =>
           texto.includes(
-            normalizar(
+            norm(
               palabra
             )
           )
@@ -682,7 +780,7 @@ function normalizarPrograma(
 }
 
 
-function nombrePrograma(
+function programaNombre(
   id
 ) {
 
@@ -719,68 +817,70 @@ function scoreCabecera(
   let score = 0;
 
 
-  fila.forEach(
-    celda => {
+  for (
+    const celda
+    of fila
+  ) {
 
-      const texto =
-        normalizar(
-          celda
-        );
-
-
-      if (!texto) {
-        return;
-      }
-
-
-      score += 1;
-
-
-      CAMPOS_BASE.forEach(
-        campo => {
-
-          if (
-            campo.aliases.some(
-              alias =>
-                normalizar(alias) ===
-                texto
-            )
-          ) {
-
-            score += 5;
-
-          }
-
-        }
+    const texto =
+      norm(
+        celda
       );
 
 
+    if (!texto) {
+      continue;
+    }
+
+
+    score += 1;
+
+
+    for (
+      const campo
+      of CAMPOS
+    ) {
+
       if (
-        texto.includes(
-          'programa'
+        campo.aliases.some(
+          alias =>
+            norm(alias) ===
+            texto
         )
       ) {
 
-        score += 4;
-
-      }
-
-
-      if (
-        texto.includes(
-          'beneficio'
-        ) ||
-        texto.includes(
-          'descuento'
-        )
-      ) {
-
-        score += 4;
+        score += 5;
 
       }
 
     }
-  );
+
+
+    if (
+      texto.includes(
+        'programa'
+      )
+    ) {
+
+      score += 4;
+
+    }
+
+
+    if (
+      texto.includes(
+        'beneficio'
+      ) ||
+      texto.includes(
+        'descuento'
+      )
+    ) {
+
+      score += 4;
+
+    }
+
+  }
 
 
   return score;
@@ -792,21 +892,18 @@ function detectarFilaCabecera(
   filas
 ) {
 
-  let mejorIndice = 0;
+  let mejor = 0;
 
   let mejorScore = -1;
 
 
-  const limite =
-    Math.min(
-      filas.length,
-      10
-    );
-
-
   for (
     let i = 0;
-    i < limite;
+    i <
+      Math.min(
+        filas.length,
+        10
+      );
     i++
   ) {
 
@@ -824,7 +921,7 @@ function detectarFilaCabecera(
       mejorScore =
         score;
 
-      mejorIndice =
+      mejor =
         i;
 
     }
@@ -832,7 +929,7 @@ function detectarFilaCabecera(
   }
 
 
-  return mejorIndice;
+  return mejor;
 
 }
 
@@ -846,24 +943,16 @@ function prepararCabeceras(
 
 
   return fila.map(
-    (valor, index) => {
-
-      let nombre =
-        limpiarValor(
-          valor
-        );
-
-
-      if (!nombre) {
-
-        nombre =
-          `Columna ${index + 1}`;
-
-      }
-
+    (
+      valor,
+      index
+    ) => {
 
       const base =
-        nombre;
+        limpiar(
+          valor
+        ) ||
+        `Columna ${index + 1}`;
 
 
       const cantidad =
@@ -878,17 +967,9 @@ function prepararCabeceras(
       );
 
 
-      if (
-        cantidad > 0
-      ) {
-
-        nombre =
-          `${base} (${cantidad + 1})`;
-
-      }
-
-
-      return nombre;
+      return cantidad
+        ? `${base} (${cantidad + 1})`
+        : base;
 
     }
   );
@@ -897,10 +978,10 @@ function prepararCabeceras(
 
 
 /* =========================================================
-   AUTODETECCIÓN COLUMNAS
+   DETECTAR COLUMNAS
 ========================================================= */
 
-function detectarColumnaPorAlias(
+function detectarColumna(
   aliases
 ) {
 
@@ -909,70 +990,59 @@ function detectarColumnaPorAlias(
   let mejorScore = 0;
 
 
-  cabeceras.forEach(
-    cabecera => {
+  for (
+    const cabecera
+    of estado.cabeceras
+  ) {
 
-      const texto =
-        normalizar(
-          cabecera
+    const texto =
+      norm(
+        cabecera
+      );
+
+
+    for (
+      const alias
+      of aliases
+    ) {
+
+      const normalizado =
+        norm(
+          alias
         );
 
 
-      aliases.forEach(
-        alias => {
-
-          const aliasNorm =
-            normalizar(
-              alias
-            );
-
-
-          let score = 0;
-
-
-          if (
-            texto === aliasNorm
-          ) {
-
-            score = 1;
-
-          } else if (
-            texto.includes(
-              aliasNorm
+      const score =
+        texto ===
+        normalizado
+          ? 1
+          : texto.includes(
+              normalizado
             )
-          ) {
-
-            score = 0.85;
-
-          } else if (
-            aliasNorm.includes(
+          ? 0.85
+          : normalizado.includes(
               texto
             )
-          ) {
-
-            score = 0.70;
-
-          }
+          ? 0.70
+          : 0;
 
 
-          if (
-            score >
-            mejorScore
-          ) {
+      if (
+        score >
+        mejorScore
+      ) {
 
-            mejorScore =
-              score;
+        mejorScore =
+          score;
 
-            mejor =
-              cabecera;
+        mejor =
+          cabecera;
 
-          }
-
-        }
-      );
+      }
 
     }
-  );
+
+  }
 
 
   return mejor;
@@ -985,22 +1055,23 @@ function detectarMapeo() {
   const nuevo = {};
 
 
-  CAMPOS_BASE.forEach(
-    campo => {
+  for (
+    const campo
+    of CAMPOS
+  ) {
 
-      nuevo[
-        campo.key
-      ] =
-        detectarColumnaPorAlias(
-          campo.aliases
-        );
+    nuevo[
+      campo.key
+    ] =
+      detectarColumna(
+        campo.aliases
+      );
 
-    }
-  );
+  }
 
 
   nuevo.programa =
-    detectarColumnaPorAlias([
+    detectarColumna([
       'programa',
       'programa beneficio',
       'tarjeta',
@@ -1009,7 +1080,7 @@ function detectarMapeo() {
 
 
   nuevo.beneficio =
-    detectarColumnaPorAlias([
+    detectarColumna([
       'beneficio',
       'descuento',
       'promocion',
@@ -1019,7 +1090,7 @@ function detectarMapeo() {
 
 
   nuevo.condiciones =
-    detectarColumnaPorAlias([
+    detectarColumna([
       'condiciones',
       'detalle',
       'detalles',
@@ -1029,11 +1100,11 @@ function detectarMapeo() {
     ]);
 
 
-  mapeo =
+  estado.mapeo =
     nuevo;
 
 
-  modoBeneficios =
+  estado.modo =
     (
       nuevo.programa &&
       nuevo.beneficio
@@ -1042,106 +1113,151 @@ function detectarMapeo() {
       : 'columnas';
 
 
-  detectarColumnasProgramas();
+  detectarMapeoProgramas();
+
+}
+
+
+function detectarMapeoProgramas() {
+
+  estado.mapeoProgramas = {};
+
+
+  for (
+    const programa
+    of PROGRAMAS
+  ) {
+
+    let beneficio = '';
+
+    let condiciones = '';
+
+
+    for (
+      const cabecera
+      of estado.cabeceras
+    ) {
+
+      const texto =
+        norm(
+          cabecera
+        );
+
+
+      const coincide =
+        programa.palabras.some(
+          palabra =>
+            texto.includes(
+              norm(
+                palabra
+              )
+            )
+        );
+
+
+      if (!coincide) {
+        continue;
+      }
+
+
+      if (
+        texto.includes(
+          'condicion'
+        ) ||
+        texto.includes(
+          'detalle'
+        ) ||
+        texto.includes(
+          'observacion'
+        ) ||
+        texto.includes(
+          'aclaracion'
+        )
+      ) {
+
+        if (!condiciones) {
+
+          condiciones =
+            cabecera;
+
+        }
+
+      } else if (
+        !beneficio
+      ) {
+
+        beneficio =
+          cabecera;
+
+      }
+
+    }
+
+
+    estado.mapeoProgramas[
+      programa.id
+    ] = {
+
+      beneficio,
+
+      condiciones,
+
+    };
+
+  }
 
 }
 
 
 /* =========================================================
-   DETECTAR PROGRAMAS EN COLUMNAS
+   PREPARAR HOJA
 ========================================================= */
 
-function detectarColumnasProgramas() {
+function prepararHoja(
+  nombre
+) {
 
-  mapeoProgramas = {};
-
-
-  PROGRAMAS.forEach(
-    programa => {
-
-      let beneficio = '';
-
-      let condiciones = '';
+  estado.hoja =
+    nombre;
 
 
-      cabeceras.forEach(
-        cabecera => {
-
-          const texto =
-            normalizar(
-              cabecera
-            );
+  const hoja =
+    estado.workbook
+      .Sheets[
+        nombre
+      ];
 
 
-          const coincide =
-            programa.palabras.some(
-              palabra =>
-                texto.includes(
-                  normalizar(
-                    palabra
-                  )
-                )
-            );
-
-
-          if (!coincide) {
-            return;
-          }
-
-
-          if (
-            texto.includes(
-              'condicion'
-            ) ||
-            texto.includes(
-              'detalle'
-            ) ||
-            texto.includes(
-              'observacion'
-            ) ||
-            texto.includes(
-              'aclaracion'
-            )
-          ) {
-
-            if (!condiciones) {
-
-              condiciones =
-                cabecera;
-
-            }
-
-          } else {
-
-            if (!beneficio) {
-
-              beneficio =
-                cabecera;
-
-            }
-
-          }
-
+  estado.filas =
+    XLSX.utils
+      .sheet_to_json(
+        hoja,
+        {
+          header: 1,
+          defval: '',
+          raw: false,
         }
       );
 
 
-      mapeoProgramas[
-        programa.id
-      ] = {
-        beneficio,
-        condiciones,
-      };
+  estado.filaCabecera =
+    detectarFilaCabecera(
+      estado.filas
+    );
 
-    }
-  );
+
+  estado.cabeceras =
+    prepararCabeceras(
+      estado.filas[
+        estado.filaCabecera
+      ] || []
+    );
+
+
+  detectarMapeo();
 
 }
 
-
-/* =========================================================
-   VALOR DE FILA
-========================================================= */
 
 function valorFila(
   fila,
@@ -1154,29 +1270,25 @@ function valorFila(
 
 
   const indice =
-    cabeceras.indexOf(
-      cabecera
-    );
+    estado.cabeceras
+      .indexOf(
+        cabecera
+      );
 
 
-  if (
-    indice < 0
-  ) {
-
-    return '';
-
-  }
-
-
-  return limpiarValor(
-    fila[indice]
-  );
+  return indice < 0
+    ? ''
+    : limpiar(
+        fila[
+          indice
+        ]
+      );
 
 }
 
 
 /* =========================================================
-   SELECT MAPEO
+   SELECT
 ========================================================= */
 
 function selectColumna(
@@ -1197,27 +1309,29 @@ function selectColumna(
     >
 
       <option value="">
+
         ${
           requerido
             ? 'Seleccionar columna...'
             : 'No usar'
         }
+
       </option>
 
       ${
-        cabeceras
+        estado.cabeceras
           .map(
             cabecera => `
 
               <option
-                value="${escapar(cabecera)}"
+                value="${esc(cabecera)}"
                 ${
                   cabecera === valor
                     ? 'selected'
                     : ''
                 }
               >
-                ${escapar(cabecera)}
+                ${esc(cabecera)}
               </option>
 
             `
@@ -1233,34 +1347,195 @@ function selectColumna(
 
 
 /* =========================================================
-   MODAL
+   OVERLAY
 ========================================================= */
+
+function overlay() {
+
+  return document
+    .querySelector(
+      '#importador-overlay'
+    );
+
+}
+
+
+function cerrarImportador() {
+
+  document
+    .querySelector(
+      '#importador-overlay'
+    )
+    ?.remove();
+
+
+  document
+    .querySelector(
+      '#imp-editor-layer'
+    )
+    ?.remove();
+
+}
+
+
+function conectarCerrar() {
+
+  document
+    .querySelector(
+      '#imp-cerrar'
+    )
+    ?.addEventListener(
+      'click',
+      cerrarImportador
+    );
+
+
+  const contenedor =
+    overlay();
+
+
+  contenedor
+    ?.addEventListener(
+      'click',
+      event => {
+
+        if (
+          event.target ===
+          contenedor
+        ) {
+
+          cerrarImportador();
+
+        }
+
+      }
+    );
+
+}
+
 
 function abrirImportador() {
 
   cerrarImportador();
 
 
-  const overlay =
+  const contenedor =
     document.createElement(
       'div'
     );
 
 
-  overlay.id =
+  contenedor.id =
     'importador-overlay';
 
 
-  overlay.className =
+  contenedor.className =
     'imp-overlay';
 
 
-  document.body.appendChild(
-    overlay
-  );
+  document.body
+    .appendChild(
+      contenedor
+    );
 
 
   renderInicio();
+
+}
+
+
+/* =========================================================
+   PLANTILLA
+========================================================= */
+
+function descargarPlantilla() {
+
+  const contenido = [
+
+    [
+      'Comercio',
+      'Rubro',
+      'Localidad',
+      'Dirección',
+      'Teléfono',
+      'Horario',
+      'Programa',
+      'Beneficio',
+      'Condiciones',
+      'Latitud',
+      'Longitud',
+    ],
+
+    [
+      'Comercio ejemplo',
+      'Gastronomía',
+      'Morón',
+      'Brown 123',
+      '11 4444-0000',
+      'Lun a sáb 9 a 20',
+      'Tarjeta Joven',
+      '15% de descuento',
+      'No acumulable',
+      '',
+      '',
+    ],
+
+  ]
+    .map(
+      fila =>
+        fila
+          .map(
+            valor =>
+              `"${String(valor)
+                .replaceAll(
+                  '"',
+                  '""'
+                )}"`
+          )
+          .join(',')
+    )
+    .join('\n');
+
+
+  const blob =
+    new Blob(
+      [
+        '\ufeff' +
+        contenido,
+      ],
+      {
+        type:
+          'text/csv;charset=utf-8',
+      }
+    );
+
+
+  const url =
+    URL.createObjectURL(
+      blob
+    );
+
+
+  const enlace =
+    document.createElement(
+      'a'
+    );
+
+
+  enlace.href =
+    url;
+
+
+  enlace.download =
+    'plantilla-comercios-moron.csv';
+
+
+  enlace.click();
+
+
+  URL.revokeObjectURL(
+    url
+  );
 
 }
 
@@ -1271,18 +1546,16 @@ function abrirImportador() {
 
 function renderInicio() {
 
-  const overlay =
-    document.querySelector(
-      '#importador-overlay'
-    );
+  const contenedor =
+    overlay();
 
 
-  if (!overlay) {
+  if (!contenedor) {
     return;
   }
 
 
-  overlay.innerHTML = `
+  contenedor.innerHTML = `
 
     <section class="imp-modal">
 
@@ -1299,12 +1572,12 @@ function renderInicio() {
           </h2>
 
           <p>
-            Excel o CSV. Primero analizamos
-            los datos y los posibles duplicados.
+            Excel o CSV. Primero analizamos,
+            después revisás y recién al final
+            se guarda.
           </p>
 
         </div>
-
 
         <button
           id="imp-cerrar"
@@ -1327,10 +1600,8 @@ function renderInicio() {
         </strong>
 
         <p>
-          Formatos admitidos:
-          .xlsx, .xls y .csv
+          .xlsx, .xls o .csv
         </p>
-
 
         <label class="imp-file-button">
 
@@ -1347,15 +1618,29 @@ function renderInicio() {
       </div>
 
 
+      <div class="imp-start-actions">
+
+        <button
+          id="imp-plantilla"
+          class="imp-secondary"
+        >
+          Descargar plantilla CSV
+        </button>
+
+      </div>
+
+
       <div class="imp-note">
 
         <strong>
-          En esta etapa no se guarda nada.
+          No se guarda nada al seleccionar
+          el archivo.
         </strong>
 
-        Primero vamos a detectar comercios
-        repetidos, errores de tipeo,
-        programas y beneficios.
+        Primero vas a poder revisar
+        duplicados, editar los comercios
+        y decidir qué hacer con cada
+        coincidencia.
 
       </div>
 
@@ -1369,9 +1654,19 @@ function renderInicio() {
 
   document
     .querySelector(
+      '#imp-plantilla'
+    )
+    ?.addEventListener(
+      'click',
+      descargarPlantilla
+    );
+
+
+  document
+    .querySelector(
       '#imp-archivo'
     )
-    .addEventListener(
+    ?.addEventListener(
       'change',
       async event => {
 
@@ -1384,9 +1679,54 @@ function renderInicio() {
         }
 
 
-        await leerArchivo(
-          archivo
-        );
+        try {
+
+          estado.archivo =
+            archivo;
+
+
+          estado.workbook =
+            XLSX.read(
+              await archivo.arrayBuffer(),
+              {
+                type:
+                  'array',
+              }
+            );
+
+
+          if (
+            !estado.workbook
+              .SheetNames
+              .length
+          ) {
+
+            throw new Error(
+              'El archivo no contiene hojas.'
+            );
+
+          }
+
+
+          prepararHoja(
+            estado.workbook
+              .SheetNames[0]
+          );
+
+
+          renderMapeo();
+
+        } catch (error) {
+
+          alert(
+            'No se pudo leer el archivo: ' +
+            (
+              error?.message ||
+              error
+            )
+          );
+
+        }
 
       }
     );
@@ -1395,128 +1735,264 @@ function renderInicio() {
 
 
 /* =========================================================
-   LEER ARCHIVO
+   GUARDAR MAPEO
 ========================================================= */
 
-async function leerArchivo(
-  archivo
-) {
+function guardarMapeoVisual() {
 
-  archivoActual =
-    archivo;
-
-
-  const buffer =
-    await archivo.arrayBuffer();
-
-
-  workbookActual =
-    XLSX.read(
-      buffer,
-      {
-        type: 'array',
-      }
-    );
-
-
-  if (
-    !workbookActual
-      .SheetNames
-      .length
+  for (
+    const campo
+    of CAMPOS
   ) {
 
-    alert(
-      'El archivo no contiene hojas.'
-    );
+    const elemento =
+      document.querySelector(
+        `#imp-map-${campo.key}`
+      );
 
-    return;
+
+    if (elemento) {
+
+      estado.mapeo[
+        campo.key
+      ] =
+        elemento.value;
+
+    }
 
   }
 
 
-  hojaActual =
-    workbookActual
-      .SheetNames[0];
+  if (
+    estado.modo ===
+    'filas'
+  ) {
+
+    for (
+      const key
+      of [
+        'programa',
+        'beneficio',
+        'condiciones',
+      ]
+    ) {
+
+      const elemento =
+        document.querySelector(
+          `#imp-map-${key}`
+        );
 
 
-  prepararHoja(
-    hojaActual
-  );
+      if (elemento) {
 
+        estado.mapeo[
+          key
+        ] =
+          elemento.value;
 
-  renderMapeo();
+      }
+
+    }
+
+  } else {
+
+    for (
+      const programa
+      of PROGRAMAS
+    ) {
+
+      estado.mapeoProgramas[
+        programa.id
+      ] = {
+
+        beneficio:
+          document
+            .querySelector(
+              `#imp-programa-${programa.id}-beneficio`
+            )
+            ?.value ||
+          '',
+
+        condiciones:
+          document
+            .querySelector(
+              `#imp-programa-${programa.id}-condiciones`
+            )
+            ?.value ||
+          '',
+
+      };
+
+    }
+
+  }
 
 }
 
 
 /* =========================================================
-   PREPARAR HOJA
+   MAPEO BENEFICIOS
 ========================================================= */
 
-function prepararHoja(
-  nombreHoja
-) {
+function renderMapeoBeneficios() {
 
-  hojaActual =
-    nombreHoja;
-
-
-  const hoja =
-    workbookActual
-      .Sheets[
-        hojaActual
-      ];
+  const contenedor =
+    document.querySelector(
+      '#imp-beneficios-mapeo'
+    );
 
 
-  filasCrudas =
-    XLSX.utils
-      .sheet_to_json(
-        hoja,
-        {
-          header: 1,
-          defval: '',
-          raw: false,
+  if (!contenedor) {
+    return;
+  }
+
+
+  if (
+    estado.modo ===
+    'filas'
+  ) {
+
+    contenedor.innerHTML = `
+
+      <div class="imp-map-grid imp-map-benefits">
+
+        <label>
+
+          Programa
+
+          ${
+            selectColumna(
+              'imp-map-programa',
+              estado.mapeo.programa ||
+              ''
+            )
+          }
+
+        </label>
+
+
+        <label>
+
+          Beneficio / descuento
+
+          ${
+            selectColumna(
+              'imp-map-beneficio',
+              estado.mapeo.beneficio ||
+              ''
+            )
+          }
+
+        </label>
+
+
+        <label>
+
+          Condiciones / detalle
+
+          ${
+            selectColumna(
+              'imp-map-condiciones',
+              estado.mapeo.condiciones ||
+              ''
+            )
+          }
+
+        </label>
+
+      </div>
+
+    `;
+
+  } else {
+
+    contenedor.innerHTML = `
+
+      <div class="imp-program-map">
+
+        ${
+          PROGRAMAS
+            .map(
+              programa => {
+
+                const actual =
+                  estado
+                    .mapeoProgramas[
+                      programa.id
+                    ] ||
+                  {};
+
+
+                return `
+
+                  <article>
+
+                    <strong>
+                      ${esc(programa.nombre)}
+                    </strong>
+
+                    <label>
+
+                      Columna del beneficio
+
+                      ${
+                        selectColumna(
+                          `imp-programa-${programa.id}-beneficio`,
+                          actual.beneficio ||
+                          ''
+                        )
+                      }
+
+                    </label>
+
+                    <label>
+
+                      Columna de condiciones
+
+                      ${
+                        selectColumna(
+                          `imp-programa-${programa.id}-condiciones`,
+                          actual.condiciones ||
+                          ''
+                        )
+                      }
+
+                    </label>
+
+                  </article>
+
+                `;
+
+              }
+            )
+            .join('')
         }
-      );
 
+      </div>
 
-  filaCabecera =
-    detectarFilaCabecera(
-      filasCrudas
-    );
+    `;
 
-
-  cabeceras =
-    prepararCabeceras(
-      filasCrudas[
-        filaCabecera
-      ] || []
-    );
-
-
-  detectarMapeo();
+  }
 
 }
 
 
 /* =========================================================
-   MAPEO VISUAL
+   MAPEO PRINCIPAL
 ========================================================= */
 
 function renderMapeo() {
 
-  const overlay =
-    document.querySelector(
-      '#importador-overlay'
-    );
+  const contenedor =
+    overlay();
 
 
-  if (!overlay) {
+  if (!contenedor) {
     return;
   }
 
 
-  overlay.innerHTML = `
+  contenedor.innerHTML = `
 
     <section class="imp-modal imp-modal-large">
 
@@ -1525,7 +2001,7 @@ function renderMapeo() {
         <div>
 
           <span>
-            PASO 1 DE 2
+            PASO 1 DE 3
           </span>
 
           <h2>
@@ -1538,7 +2014,6 @@ function renderMapeo() {
           </p>
 
         </div>
-
 
         <button
           id="imp-cerrar"
@@ -1559,10 +2034,12 @@ function renderMapeo() {
           </span>
 
           <strong>
-            ${escapar(
-              archivoActual?.name ||
-              ''
-            )}
+            ${
+              esc(
+                estado.archivo?.name ||
+                ''
+              )
+            }
           </strong>
 
         </div>
@@ -1577,20 +2054,21 @@ function renderMapeo() {
           <select id="imp-hoja">
 
             ${
-              workbookActual
+              estado.workbook
                 .SheetNames
                 .map(
                   hoja => `
 
                     <option
-                      value="${escapar(hoja)}"
+                      value="${esc(hoja)}"
                       ${
-                        hoja === hojaActual
+                        hoja ===
+                        estado.hoja
                           ? 'selected'
                           : ''
                       }
                     >
-                      ${escapar(hoja)}
+                      ${esc(hoja)}
                     </option>
 
                   `
@@ -1610,14 +2088,16 @@ function renderMapeo() {
           </span>
 
           <strong>
+
             ${
               Math.max(
                 0,
-                filasCrudas.length -
-                filaCabecera -
+                estado.filas.length -
+                estado.filaCabecera -
                 1
               )
             }
+
           </strong>
 
         </div>
@@ -1634,8 +2114,8 @@ function renderMapeo() {
           </h3>
 
           <p>
-            Detectamos automáticamente
-            las columnas más probables.
+            La selección inicial es automática,
+            pero la podés corregir.
           </p>
 
         </div>
@@ -1644,15 +2124,13 @@ function renderMapeo() {
         <div class="imp-map-grid">
 
           ${
-            CAMPOS_BASE
+            CAMPOS
               .map(
                 campo => `
 
                   <label>
 
-                    ${
-                      campo.label
-                    }
+                    ${esc(campo.label)}
 
                     ${
                       campo.requerido
@@ -1663,7 +2141,7 @@ function renderMapeo() {
                     ${
                       selectColumna(
                         `imp-map-${campo.key}`,
-                        mapeo[
+                        estado.mapeo[
                           campo.key
                         ],
                         campo.requerido
@@ -1692,7 +2170,7 @@ function renderMapeo() {
 
           <p>
             Elegí cómo está organizada
-            tu planilla.
+            la planilla.
           </p>
 
         </div>
@@ -1707,7 +2185,7 @@ function renderMapeo() {
               name="imp-modo"
               value="filas"
               ${
-                modoBeneficios ===
+                estado.modo ===
                 'filas'
                   ? 'checked'
                   : ''
@@ -1721,8 +2199,8 @@ function renderMapeo() {
               </strong>
 
               <small>
-                El comercio puede aparecer
-                varias veces.
+                El mismo comercio puede
+                repetirse.
               </small>
 
             </div>
@@ -1737,7 +2215,7 @@ function renderMapeo() {
               name="imp-modo"
               value="columnas"
               ${
-                modoBeneficios ===
+                estado.modo ===
                 'columnas'
                   ? 'checked'
                   : ''
@@ -1776,7 +2254,6 @@ function renderMapeo() {
           Volver
         </button>
 
-
         <button
           id="imp-analizar"
           class="imp-primary"
@@ -1798,13 +2275,14 @@ function renderMapeo() {
     .querySelector(
       '#imp-hoja'
     )
-    .addEventListener(
+    ?.addEventListener(
       'change',
       event => {
 
         prepararHoja(
           event.target.value
         );
+
 
         renderMapeo();
 
@@ -1825,8 +2303,10 @@ function renderMapeo() {
 
             guardarMapeoVisual();
 
-            modoBeneficios =
+
+            estado.modo =
               event.target.value;
+
 
             renderMapeoBeneficios();
 
@@ -1841,7 +2321,7 @@ function renderMapeo() {
     .querySelector(
       '#imp-volver'
     )
-    .addEventListener(
+    ?.addEventListener(
       'click',
       renderInicio
     );
@@ -1851,7 +2331,7 @@ function renderMapeo() {
     .querySelector(
       '#imp-analizar'
     )
-    .addEventListener(
+    ?.addEventListener(
       'click',
       async () => {
 
@@ -1859,36 +2339,14 @@ function renderMapeo() {
 
 
         if (
-          !mapeo.nombre
+          !estado.mapeo.nombre
         ) {
 
           alert(
-            'Tenés que seleccionar la columna del nombre del comercio.'
+            'Seleccioná la columna del nombre del comercio.'
           );
 
           return;
-
-        }
-
-
-        if (
-          modoBeneficios ===
-          'filas' &&
-          (
-            !mapeo.programa ||
-            !mapeo.beneficio
-          )
-        ) {
-
-          const continuar =
-            confirm(
-              'No seleccionaste Programa y Beneficio.\n\nSe analizarán los comercios, pero sin adhesiones a programas.\n\n¿Continuar?'
-            );
-
-
-          if (!continuar) {
-            return;
-          }
 
         }
 
@@ -1897,19 +2355,36 @@ function renderMapeo() {
 
 
         await new Promise(
-          resolve =>
+          resolver =>
             setTimeout(
-              resolve,
-              100
+              resolver,
+              50
             )
         );
 
 
-        ultimoAnalisis =
-          await analizarBase();
+        try {
+
+          estado.analisis =
+            await analizarBase();
 
 
-        renderResultado();
+          renderResultado();
+
+        } catch (error) {
+
+          alert(
+            'No se pudo analizar la base: ' +
+            (
+              error?.message ||
+              error
+            )
+          );
+
+
+          renderMapeo();
+
+        }
 
       }
     );
@@ -1921,249 +2396,7 @@ function renderMapeo() {
 
 
 /* =========================================================
-   GUARDAR MAPEO
-========================================================= */
-
-function guardarMapeoVisual() {
-
-  CAMPOS_BASE.forEach(
-    campo => {
-
-      const elemento =
-        document.querySelector(
-          `#imp-map-${campo.key}`
-        );
-
-
-      if (elemento) {
-
-        mapeo[
-          campo.key
-        ] =
-          elemento.value;
-
-      }
-
-    }
-  );
-
-
-  if (
-    modoBeneficios ===
-    'filas'
-  ) {
-
-    [
-      'programa',
-      'beneficio',
-      'condiciones',
-    ].forEach(
-      key => {
-
-        const elemento =
-          document.querySelector(
-            `#imp-map-${key}`
-          );
-
-
-        if (elemento) {
-
-          mapeo[key] =
-            elemento.value;
-
-        }
-
-      }
-    );
-
-  } else {
-
-    PROGRAMAS.forEach(
-      programa => {
-
-        const beneficio =
-          document.querySelector(
-            `#imp-programa-${programa.id}-beneficio`
-          );
-
-
-        const condiciones =
-          document.querySelector(
-            `#imp-programa-${programa.id}-condiciones`
-          );
-
-
-        mapeoProgramas[
-          programa.id
-        ] = {
-
-          beneficio:
-            beneficio?.value ||
-            '',
-
-          condiciones:
-            condiciones?.value ||
-            '',
-
-        };
-
-      }
-    );
-
-  }
-
-}
-
-
-/* =========================================================
-   MAPEO BENEFICIOS
-========================================================= */
-
-function renderMapeoBeneficios() {
-
-  const contenedor =
-    document.querySelector(
-      '#imp-beneficios-mapeo'
-    );
-
-
-  if (!contenedor) {
-    return;
-  }
-
-
-  if (
-    modoBeneficios ===
-    'filas'
-  ) {
-
-    contenedor.innerHTML = `
-
-      <div class="imp-map-grid imp-map-benefits">
-
-        <label>
-
-          Programa
-
-          ${
-            selectColumna(
-              'imp-map-programa',
-              mapeo.programa ||
-              ''
-            )
-          }
-
-        </label>
-
-
-        <label>
-
-          Beneficio / descuento
-
-          ${
-            selectColumna(
-              'imp-map-beneficio',
-              mapeo.beneficio ||
-              ''
-            )
-          }
-
-        </label>
-
-
-        <label>
-
-          Condiciones / detalle
-
-          ${
-            selectColumna(
-              'imp-map-condiciones',
-              mapeo.condiciones ||
-              ''
-            )
-          }
-
-        </label>
-
-      </div>
-
-    `;
-
-  } else {
-
-    contenedor.innerHTML = `
-
-      <div class="imp-program-map">
-
-        ${
-          PROGRAMAS
-            .map(
-              programa => {
-
-                const actual =
-                  mapeoProgramas[
-                    programa.id
-                  ] || {};
-
-
-                return `
-
-                  <article>
-
-                    <strong>
-                      ${programa.nombre}
-                    </strong>
-
-
-                    <label>
-
-                      Columna del beneficio
-
-                      ${
-                        selectColumna(
-                          `imp-programa-${programa.id}-beneficio`,
-                          actual.beneficio ||
-                          ''
-                        )
-                      }
-
-                    </label>
-
-
-                    <label>
-
-                      Columna de condiciones
-
-                      ${
-                        selectColumna(
-                          `imp-programa-${programa.id}-condiciones`,
-                          actual.condiciones ||
-                          ''
-                        )
-                      }
-
-                    </label>
-
-                  </article>
-
-                `;
-
-              }
-            )
-            .join('')
-        }
-
-      </div>
-
-    `;
-
-  }
-
-}
-
-
-/* =========================================================
-   FILAS A REGISTROS
+   CONSTRUIR REGISTROS
 ========================================================= */
 
 function construirRegistros() {
@@ -2173,55 +2406,61 @@ function construirRegistros() {
   const errores = [];
 
 
-  const filasDatos =
-    filasCrudas.slice(
-      filaCabecera + 1
+  const filas =
+    estado.filas.slice(
+      estado.filaCabecera +
+      1
     );
 
 
-  filasDatos.forEach(
+  filas.forEach(
     (
       fila,
       indice
     ) => {
 
       const numeroFila =
-        filaCabecera +
+        estado.filaCabecera +
         indice +
         2;
+
+
+      if (
+        fila.every(
+          valor =>
+            !limpiar(
+              valor
+            )
+        )
+      ) {
+
+        return;
+
+      }
 
 
       const nombre =
         valorFila(
           fila,
-          mapeo.nombre
+          estado.mapeo.nombre
         );
-
-
-      const filaVacia =
-        fila.every(
-          celda =>
-            !limpiarValor(
-              celda
-            )
-        );
-
-
-      if (filaVacia) {
-        return;
-      }
 
 
       if (!nombre) {
 
         errores.push({
+
           fila:
             numeroFila,
+
           tipo:
             'Nombre faltante',
+
           detalle:
             'La fila no tiene nombre de comercio.',
+
         });
+
 
         return;
 
@@ -2238,43 +2477,43 @@ function construirRegistros() {
         rubro:
           valorFila(
             fila,
-            mapeo.rubro
+            estado.mapeo.rubro
           ),
 
         localidad:
           valorFila(
             fila,
-            mapeo.localidad
+            estado.mapeo.localidad
           ),
 
         direccion:
           valorFila(
             fila,
-            mapeo.direccion
+            estado.mapeo.direccion
           ),
 
         telefono:
           valorFila(
             fila,
-            mapeo.telefono
+            estado.mapeo.telefono
           ),
 
         horario:
           valorFila(
             fila,
-            mapeo.horario
+            estado.mapeo.horario
           ),
 
         lat:
           valorFila(
             fila,
-            mapeo.lat
+            estado.mapeo.lat
           ),
 
         lng:
           valorFila(
             fila,
-            mapeo.lng
+            estado.mapeo.lng
           ),
 
         adhesiones: [],
@@ -2283,28 +2522,28 @@ function construirRegistros() {
 
 
       if (
-        modoBeneficios ===
+        estado.modo ===
         'filas'
       ) {
 
         const programaTexto =
           valorFila(
             fila,
-            mapeo.programa
+            estado.mapeo.programa
           );
 
 
         const beneficio =
           valorFila(
             fila,
-            mapeo.beneficio
+            estado.mapeo.beneficio
           );
 
 
         const condiciones =
           valorFila(
             fila,
-            mapeo.condiciones
+            estado.mapeo.condiciones
           );
 
 
@@ -2313,7 +2552,7 @@ function construirRegistros() {
         ) {
 
           const programa =
-            normalizarPrograma(
+            programaId(
               programaTexto
             );
 
@@ -2321,36 +2560,48 @@ function construirRegistros() {
           if (!programa) {
 
             errores.push({
+
               fila:
                 numeroFila,
+
               tipo:
                 'Programa no reconocido',
+
               detalle:
                 programaTexto,
+
             });
 
           } else if (
-            beneficio
+            !beneficio
           ) {
+
+            errores.push({
+
+              fila:
+                numeroFila,
+
+              tipo:
+                'Beneficio faltante',
+
+              detalle:
+                `${nombre} / ${programaTexto}`,
+
+            });
+
+          } else {
 
             registro
               .adhesiones
               .push({
+
                 programa,
+
                 beneficio,
+
                 condiciones,
+
               });
-
-          } else {
-
-            errores.push({
-              fila:
-                numeroFila,
-              tipo:
-                'Beneficio faltante',
-              detalle:
-                `${nombre} / ${programaTexto}`,
-            });
 
           }
 
@@ -2358,44 +2609,53 @@ function construirRegistros() {
 
       } else {
 
-        PROGRAMAS.forEach(
-          programa => {
+        for (
+          const programa
+          of PROGRAMAS
+        ) {
 
-            const config =
-              mapeoProgramas[
+          const config =
+            estado
+              .mapeoProgramas[
                 programa.id
-              ] || {};
+              ] ||
+            {};
 
 
-            const beneficio =
-              valorFila(
-                fila,
-                config.beneficio
-              );
+          const beneficio =
+            valorFila(
+              fila,
+              config.beneficio
+            );
 
 
-            const condiciones =
-              valorFila(
-                fila,
-                config.condiciones
-              );
+          const condiciones =
+            valorFila(
+              fila,
+              config.condiciones
+            );
 
 
-            if (beneficio) {
+          if (
+            beneficio
+          ) {
 
-              registro
-                .adhesiones
-                .push({
-                  programa:
-                    programa.id,
-                  beneficio,
-                  condiciones,
-                });
+            registro
+              .adhesiones
+              .push({
 
-            }
+                programa:
+                  programa.id,
+
+                beneficio,
+
+                condiciones,
+
+              });
 
           }
-        );
+
+        }
 
       }
 
@@ -2409,18 +2669,126 @@ function construirRegistros() {
 
 
   return {
+
     registros,
+
     errores,
+
   };
 
 }
 
 
 /* =========================================================
-   AGRUPAR COINCIDENCIAS MUY ALTAS
+   AGRUPAR BENEFICIOS
 ========================================================= */
 
-function agruparRegistros(
+function agregarAdhesion(
+  grupo,
+  adhesion,
+  fila
+) {
+
+  const existente =
+    grupo.adhesiones
+      .find(
+        item =>
+          item.programa ===
+          adhesion.programa
+      );
+
+
+  if (!existente) {
+
+    grupo
+      .adhesiones
+      .push({
+        ...adhesion,
+      });
+
+
+    return;
+
+  }
+
+
+  if (
+    norm(
+      existente.beneficio
+    ) !==
+    norm(
+      adhesion.beneficio
+    ) ||
+    norm(
+      existente.condiciones
+    ) !==
+    norm(
+      adhesion.condiciones
+    )
+  ) {
+
+    grupo
+      .conflictos
+      .push({
+
+        programa:
+          adhesion.programa,
+
+        anterior: {
+          ...existente,
+        },
+
+        nuevo: {
+          ...adhesion,
+        },
+
+        fila,
+
+      });
+
+  }
+
+}
+
+
+function completarPrincipal(
+  destino,
+  origen
+) {
+
+  for (
+    const key
+    of [
+      'rubro',
+      'localidad',
+      'direccion',
+      'telefono',
+      'horario',
+      'lat',
+      'lng',
+    ]
+  ) {
+
+    if (
+      !destino[key] &&
+      origen[key]
+    ) {
+
+      destino[key] =
+        origen[key];
+
+    }
+
+  }
+
+}
+
+
+/* =========================================================
+   AGRUPAR COMERCIOS
+========================================================= */
+
+function agrupar(
   registros
 ) {
 
@@ -2429,216 +2797,178 @@ function agruparRegistros(
   const posibles = [];
 
 
-  registros.forEach(
-    registro => {
+  for (
+    const registro
+    of registros
+  ) {
 
-      let mejorGrupo =
-        null;
-
-      let mejorComparacion =
-        null;
+    let mejor = null;
 
 
-      grupos.forEach(
-        grupo => {
+    for (
+      const grupo
+      of grupos
+    ) {
 
-          const comparacion =
-            compararComercios(
-              registro,
-              grupo.principal
-            );
-
-
-          if (
-            !mejorComparacion ||
-            comparacion.puntaje >
-            mejorComparacion.puntaje
-          ) {
-
-            mejorComparacion =
-              comparacion;
-
-            mejorGrupo =
-              grupo;
-
-          }
-
-        }
-      );
+      const comparacion =
+        comparar(
+          registro,
+          grupo.principal
+        );
 
 
       if (
-        mejorGrupo &&
-        mejorComparacion?.nivel ===
-        'alta'
+        !mejor ||
+        comparacion.puntaje >
+        mejor.comparacion.puntaje
       ) {
 
-        mejorGrupo
-          .variantes
-          .push(
-            registro
-          );
+        mejor = {
 
+          grupo,
 
-        registro.adhesiones
-          .forEach(
-            adhesion => {
+          comparacion,
 
-              const existente =
-                mejorGrupo
-                  .adhesiones
-                  .find(
-                    item =>
-                      item.programa ===
-                      adhesion.programa
-                  );
-
-
-              if (!existente) {
-
-                mejorGrupo
-                  .adhesiones
-                  .push(
-                    adhesion
-                  );
-
-              } else if (
-                normalizar(
-                  existente.beneficio
-                ) !==
-                normalizar(
-                  adhesion.beneficio
-                ) ||
-                normalizar(
-                  existente.condiciones
-                ) !==
-                normalizar(
-                  adhesion.condiciones
-                )
-              ) {
-
-                mejorGrupo
-                  .conflictos
-                  .push({
-                    programa:
-                      adhesion.programa,
-                    anterior:
-                      existente,
-                    nuevo:
-                      adhesion,
-                    fila:
-                      registro.fila,
-                  });
-
-              }
-
-            }
-          );
-
-
-        [
-          'rubro',
-          'localidad',
-          'direccion',
-          'telefono',
-          'horario',
-          'lat',
-          'lng',
-        ].forEach(
-          campo => {
-
-            if (
-              !mejorGrupo
-                .principal[
-                  campo
-                ] &&
-              registro[
-                campo
-              ]
-            ) {
-
-              mejorGrupo
-                .principal[
-                  campo
-                ] =
-                  registro[
-                    campo
-                  ];
-
-            }
-
-          }
-        );
-
-      } else {
-
-        if (
-          mejorGrupo &&
-          mejorComparacion?.nivel ===
-          'posible'
-        ) {
-
-          posibles.push({
-
-            a:
-              mejorGrupo
-                .principal,
-
-            b:
-              registro,
-
-            comparacion:
-              mejorComparacion,
-
-            origen:
-              'archivo',
-
-          });
-
-        }
-
-
-        grupos.push({
-
-          principal: {
-            ...registro,
-          },
-
-          variantes: [
-            registro,
-          ],
-
-          adhesiones: [
-            ...registro.adhesiones,
-          ],
-
-          conflictos: [],
-
-        });
+        };
 
       }
 
     }
-  );
+
+
+    if (
+      mejor &&
+      mejor.comparacion.nivel ===
+      'alta'
+    ) {
+
+      mejor.grupo
+        .variantes
+        .push(
+          registro
+        );
+
+
+      registro
+        .adhesiones
+        .forEach(
+          adhesion =>
+            agregarAdhesion(
+              mejor.grupo,
+              adhesion,
+              registro.fila
+            )
+        );
+
+
+      completarPrincipal(
+        mejor.grupo.principal,
+        registro
+      );
+
+
+      continue;
+
+    }
+
+
+    const grupo = {
+
+      id:
+        nuevoId(
+          'grupo'
+        ),
+
+      principal: {
+        ...registro,
+      },
+
+      variantes: [
+        registro,
+      ],
+
+      adhesiones:
+        registro
+          .adhesiones
+          .map(
+            adhesion => ({
+              ...adhesion,
+            })
+          ),
+
+      conflictos: [],
+
+      omitir: false,
+
+      base: null,
+
+      decisionBase:
+        'crear',
+
+    };
+
+
+    if (
+      mejor &&
+      mejor.comparacion.nivel ===
+      'posible'
+    ) {
+
+      posibles.push({
+
+        id:
+          nuevoId(
+            'posible'
+          ),
+
+        a:
+          mejor.grupo.id,
+
+        b:
+          grupo.id,
+
+        comparacion:
+          mejor.comparacion,
+
+        resuelto: false,
+
+        decision: null,
+
+      });
+
+    }
+
+
+    grupos.push(
+      grupo
+    );
+
+  }
 
 
   return {
+
     grupos,
+
     posibles,
+
   };
 
 }
 
 
 /* =========================================================
-   COMERCIOS EXISTENTES EN SUPABASE
+   SUPABASE EXISTENTE
 ========================================================= */
 
-async function cargarComerciosExistentes() {
+function credenciales() {
+
+  let sesion = null;
+
 
   try {
 
-    const sesion =
+    sesion =
       JSON.parse(
         localStorage.getItem(
           'mta_admin_session'
@@ -2646,56 +2976,82 @@ async function cargarComerciosExistentes() {
         'null'
       );
 
+  } catch {
 
-    if (
-      !sesion?.access_token
-    ) {
+    sesion = null;
 
-      return [];
-
-    }
+  }
 
 
-    const url =
+  return {
+
+    url:
       import.meta.env
         .VITE_SUPABASE_URL
         ?.replace(
           /\/$/,
           ''
-        );
+        ),
 
-
-    const key =
+    key:
       import.meta.env
-        .VITE_SUPABASE_KEY;
+        .VITE_SUPABASE_KEY,
+
+    token:
+      sesion?.access_token ||
+      '',
+
+  };
+
+}
 
 
-    if (
-      !url ||
-      !key
-    ) {
+async function cargarExistentes() {
 
-      return [];
+  const {
+    url,
+    key,
+    token,
+  } =
+    credenciales();
 
-    }
 
+  if (
+    !url ||
+    !key ||
+    !token
+  ) {
+
+    return [];
+
+  }
+
+
+  try {
 
     const respuesta =
       await fetch(
-        `${url}/rest/v1/comercios?select=id,nombre,rubro,localidad,direccion,telefono,horario,lat,lng,activo`,
+
+        `${url}/rest/v1/comercios?select=id,nombre,rubro,localidad,direccion,telefono,horario,lat,lng,activo&order=id.asc`,
+
         {
           headers: {
+
             apikey:
               key,
 
             Authorization:
-              `Bearer ${sesion.access_token}`,
+              `Bearer ${token}`,
+
           },
         }
+
       );
 
 
-    if (!respuesta.ok) {
+    if (
+      !respuesta.ok
+    ) {
 
       return [];
 
@@ -2714,79 +3070,95 @@ async function cargarComerciosExistentes() {
 
 
 /* =========================================================
-   COMPARAR CONTRA BASE ACTUAL
+   COINCIDENCIAS CON BASE
 ========================================================= */
 
-function compararConExistentes(
-  grupos,
+function asignarBaseGrupo(
+  grupo,
   existentes
 ) {
 
-  const coincidencias = [];
+  let mejor = null;
 
 
-  grupos.forEach(
-    grupo => {
+  for (
+    const existente
+    of existentes
+  ) {
 
-      let mejor =
-        null;
-
-
-      existentes.forEach(
-        existente => {
-
-          const comparacion =
-            compararComercios(
-              grupo.principal,
-              existente
-            );
-
-
-          if (
-            comparacion.nivel ===
-            'distinto'
-          ) {
-
-            return;
-
-          }
-
-
-          if (
-            !mejor ||
-            comparacion.puntaje >
-            mejor.comparacion.puntaje
-          ) {
-
-            mejor = {
-              existente,
-              comparacion,
-            };
-
-          }
-
-        }
+    const comparacion =
+      comparar(
+        grupo.principal,
+        existente
       );
 
 
-      if (mejor) {
+    if (
+      comparacion.nivel ===
+      'distinto'
+    ) {
 
-        coincidencias.push({
-          importado:
-            grupo.principal,
-          existente:
-            mejor.existente,
-          comparacion:
-            mejor.comparacion,
-        });
-
-      }
+      continue;
 
     }
-  );
 
 
-  return coincidencias;
+    if (
+      !mejor ||
+      comparacion.puntaje >
+      mejor.comparacion.puntaje
+    ) {
+
+      mejor = {
+
+        existente,
+
+        comparacion,
+
+      };
+
+    }
+
+  }
+
+
+  if (
+    mejor
+  ) {
+
+    grupo.base =
+      mejor;
+
+
+    grupo.decisionBase =
+      null;
+
+  } else {
+
+    grupo.base =
+      null;
+
+
+    grupo.decisionBase =
+      'crear';
+
+  }
+
+}
+
+
+function recalcularBases(
+  analisis
+) {
+
+  analisis.grupos
+    .forEach(
+      grupo =>
+        asignarBaseGrupo(
+          grupo,
+          analisis.existentes
+        )
+    );
 
 }
 
@@ -2808,73 +3180,56 @@ async function analizarBase() {
     grupos,
     posibles,
   } =
-    agruparRegistros(
+    agrupar(
       registros
     );
 
 
   const existentes =
-    await cargarComerciosExistentes();
+    await cargarExistentes();
 
 
-  const coincidenciasBase =
-    compararConExistentes(
-      grupos,
-      existentes
-    );
+  const analisis = {
 
-
-  const adhesiones =
-    grupos.reduce(
-      (
-        total,
-        grupo
-      ) =>
-        total +
-        grupo.adhesiones.length,
-      0
-    );
-
-
-  const conflictos =
-    grupos.flatMap(
-      grupo =>
-        grupo.conflictos
-    );
-
-
-  return {
     registros,
+
     errores,
+
     grupos,
+
     posibles,
+
     existentes,
-    coincidenciasBase,
-    adhesiones,
-    conflictos,
+
   };
+
+
+  recalcularBases(
+    analisis
+  );
+
+
+  return analisis;
 
 }
 
 
 /* =========================================================
-   ANALIZANDO
+   PANTALLA ANALIZANDO
 ========================================================= */
 
 function renderAnalizando() {
 
-  const overlay =
-    document.querySelector(
-      '#importador-overlay'
-    );
+  const contenedor =
+    overlay();
 
 
-  if (!overlay) {
+  if (!contenedor) {
     return;
   }
 
 
-  overlay.innerHTML = `
+  contenedor.innerHTML = `
 
     <section class="imp-modal imp-loading">
 
@@ -2886,7 +3241,7 @@ function renderAnalizando() {
       </strong>
 
       <p>
-        Estamos buscando duplicados,
+        Buscando duplicados,
         errores de tipeo y programas.
       </p>
 
@@ -2898,20 +3253,205 @@ function renderAnalizando() {
 
 
 /* =========================================================
-   RESULTADO
+   HELPERS ANÁLISIS
 ========================================================= */
 
-function renderResultado() {
+function grupoPorId(
+  id
+) {
 
-  const overlay =
-    document.querySelector(
-      '#importador-overlay'
+  return estado
+    .analisis
+    ?.grupos
+    .find(
+      grupo =>
+        grupo.id === id
     );
+
+}
+
+
+function paresPendientes() {
+
+  const analisis =
+    estado.analisis;
+
+
+  if (!analisis) {
+    return [];
+  }
+
+
+  return analisis
+    .posibles
+    .filter(
+      posible => {
+
+        if (
+          posible.resuelto
+        ) {
+
+          return false;
+
+        }
+
+
+        const grupoA =
+          grupoPorId(
+            posible.a
+          );
+
+
+        const grupoB =
+          grupoPorId(
+            posible.b
+          );
+
+
+        return (
+          grupoA &&
+          grupoB &&
+          !grupoA.omitir &&
+          !grupoB.omitir
+        );
+
+      }
+    );
+
+}
+
+
+function basesPendientes() {
+
+  return (
+    estado
+      .analisis
+      ?.grupos ||
+    []
+  )
+    .filter(
+      grupo =>
+        !grupo.omitir &&
+        grupo.base &&
+        !grupo.decisionBase
+    );
+
+}
+
+
+function conflictosPendientes() {
+
+  return (
+    estado
+      .analisis
+      ?.grupos ||
+    []
+  )
+    .filter(
+      grupo =>
+        !grupo.omitir &&
+        grupo.conflictos.length
+    );
+
+}
+
+
+function cantidadAdhesiones() {
+
+  return (
+    estado
+      .analisis
+      ?.grupos ||
+    []
+  )
+
+    .filter(
+      grupo =>
+        !grupo.omitir
+    )
+
+    .reduce(
+      (
+        total,
+        grupo
+      ) =>
+        total +
+        grupo.adhesiones.length,
+      0
+    );
+
+}
+
+
+function resumenCard(
+  titulo,
+  valor,
+  clase = ''
+) {
+
+  return `
+
+    <article class="${clase}">
+
+      <span>
+        ${esc(titulo)}
+      </span>
+
+      <strong>
+
+        ${
+          Number(
+            valor ||
+            0
+          )
+            .toLocaleString(
+              'es-AR'
+            )
+        }
+
+      </strong>
+
+    </article>
+
+  `;
+
+}
+
+
+/* =========================================================
+   FUSIONAR GRUPOS
+========================================================= */
+
+function fusionarGrupos(
+  idA,
+  idB
+) {
+
+  const analisis =
+    estado.analisis;
+
+
+  const grupoA =
+    analisis.grupos
+      .find(
+        grupo =>
+          grupo.id === idA
+      );
+
+
+  const grupoB =
+    analisis.grupos
+      .find(
+        grupo =>
+          grupo.id === idB
+      );
 
 
   if (
-    !overlay ||
-    !ultimoAnalisis
+    !grupoA ||
+    !grupoB ||
+    grupoA.id ===
+    grupoB.id
   ) {
 
     return;
@@ -2919,27 +3459,936 @@ function renderResultado() {
   }
 
 
-  const {
-    registros,
-    grupos,
-    posibles,
-    errores,
-    coincidenciasBase,
-    adhesiones,
-    conflictos,
-  } =
-    ultimoAnalisis;
-
-
-  const duplicadosAgrupados =
-    grupos.filter(
-      grupo =>
-        grupo.variantes.length >
-        1
+  grupoB
+    .variantes
+    .forEach(
+      variante =>
+        grupoA
+          .variantes
+          .push(
+            variante
+          )
     );
 
 
-  overlay.innerHTML = `
+  grupoB
+    .adhesiones
+    .forEach(
+      adhesion =>
+        agregarAdhesion(
+          grupoA,
+          adhesion,
+          grupoB.principal.fila
+        )
+    );
+
+
+  completarPrincipal(
+    grupoA.principal,
+    grupoB.principal
+  );
+
+
+  grupoA
+    .conflictos
+    .push(
+      ...grupoB.conflictos
+    );
+
+
+  analisis.grupos =
+    analisis.grupos
+      .filter(
+        grupo =>
+          grupo.id !==
+          grupoB.id
+      );
+
+
+  for (
+    const posible
+    of analisis.posibles
+  ) {
+
+    if (
+      posible.a ===
+      grupoB.id
+    ) {
+
+      posible.a =
+        grupoA.id;
+
+    }
+
+
+    if (
+      posible.b ===
+      grupoB.id
+    ) {
+
+      posible.b =
+        grupoA.id;
+
+    }
+
+
+    if (
+      posible.a ===
+      posible.b
+    ) {
+
+      posible.resuelto =
+        true;
+
+
+      posible.decision =
+        'unidos';
+
+    }
+
+  }
+
+
+  const vistos =
+    new Set();
+
+
+  for (
+    const posible
+    of analisis.posibles
+  ) {
+
+    if (
+      posible.resuelto
+    ) {
+
+      continue;
+
+    }
+
+
+    const clave =
+      [
+        posible.a,
+        posible.b,
+      ]
+        .sort()
+        .join('|');
+
+
+    if (
+      vistos.has(
+        clave
+      )
+    ) {
+
+      posible.resuelto =
+        true;
+
+
+      posible.decision =
+        'duplicado';
+
+    } else {
+
+      vistos.add(
+        clave
+      );
+
+    }
+
+  }
+
+
+  asignarBaseGrupo(
+    grupoA,
+    analisis.existentes
+  );
+
+}
+
+
+/* =========================================================
+   POSIBLE DUPLICADO ARCHIVO
+========================================================= */
+
+function renderPosibleArchivo(
+  posible
+) {
+
+  const grupoA =
+    grupoPorId(
+      posible.a
+    );
+
+
+  const grupoB =
+    grupoPorId(
+      posible.b
+    );
+
+
+  if (
+    !grupoA ||
+    !grupoB
+  ) {
+
+    return '';
+
+  }
+
+
+  return `
+
+    <article class="imp-detection-card possible">
+
+      <div class="imp-detection-status">
+
+        POSIBLE DUPLICADO ·
+
+        ${
+          Math.round(
+            posible
+              .comparacion
+              .puntaje *
+            100
+          )
+        }%
+
+      </div>
+
+
+      <div class="imp-compare">
+
+        <div>
+
+          <small>
+            REGISTRO A
+          </small>
+
+          <strong>
+            ${
+              esc(
+                grupoA
+                  .principal
+                  .nombre
+              )
+            }
+          </strong>
+
+          <span>
+            ${
+              esc(
+                grupoA
+                  .principal
+                  .direccion ||
+                ''
+              )
+            }
+          </span>
+
+        </div>
+
+
+        <div class="imp-vs">
+          ≈
+        </div>
+
+
+        <div>
+
+          <small>
+            REGISTRO B
+          </small>
+
+          <strong>
+            ${
+              esc(
+                grupoB
+                  .principal
+                  .nombre
+              )
+            }
+          </strong>
+
+          <span>
+            ${
+              esc(
+                grupoB
+                  .principal
+                  .direccion ||
+                ''
+              )
+            }
+          </span>
+
+        </div>
+
+      </div>
+
+
+      <div class="imp-match-reasons">
+
+        ${
+          posible
+            .comparacion
+            .mismoTelefono
+              ? '<span>✓ mismo teléfono</span>'
+              : ''
+        }
+
+        ${
+          posible
+            .comparacion
+            .mismaDireccion
+              ? '<span>✓ misma dirección</span>'
+              : ''
+        }
+
+        ${
+          posible
+            .comparacion
+            .mismaLocalidad
+              ? '<span>✓ misma localidad</span>'
+              : ''
+        }
+
+      </div>
+
+
+      <div class="imp-inline-actions">
+
+        <button
+          class="imp-success"
+          data-act="unir-archivo"
+          data-id="${posible.id}"
+        >
+          Unir
+        </button>
+
+        <button
+          class="imp-secondary"
+          data-act="separar-archivo"
+          data-id="${posible.id}"
+        >
+          Mantener separados
+        </button>
+
+      </div>
+
+    </article>
+
+  `;
+
+}
+
+
+/* =========================================================
+   COINCIDENCIA BASE
+========================================================= */
+
+function renderCoincidenciaBase(
+  grupo
+) {
+
+  const existente =
+    grupo.base.existente;
+
+
+  const comparacion =
+    grupo.base.comparacion;
+
+
+  return `
+
+    <article class="imp-detection-card possible">
+
+      <div class="imp-detection-status">
+
+        YA EXISTE EN LA BASE ·
+
+        ${
+          Math.round(
+            comparacion.puntaje *
+            100
+          )
+        }%
+
+      </div>
+
+
+      <div class="imp-compare">
+
+        <div>
+
+          <small>
+            IMPORTADO
+          </small>
+
+          <strong>
+            ${
+              esc(
+                grupo
+                  .principal
+                  .nombre
+              )
+            }
+          </strong>
+
+          <span>
+            ${
+              esc(
+                grupo
+                  .principal
+                  .direccion ||
+                ''
+              )
+            }
+          </span>
+
+        </div>
+
+
+        <div class="imp-vs">
+          ≈
+        </div>
+
+
+        <div>
+
+          <small>
+            BASE ACTUAL
+          </small>
+
+          <strong>
+            ${esc(existente.nombre)}
+          </strong>
+
+          <span>
+            ${
+              esc(
+                existente.direccion ||
+                ''
+              )
+            }
+          </span>
+
+        </div>
+
+      </div>
+
+
+      <div class="imp-inline-actions">
+
+        <button
+          class="imp-success"
+          data-act="unir-base"
+          data-id="${grupo.id}"
+        >
+          Unir con existente
+        </button>
+
+        <button
+          class="imp-secondary"
+          data-act="crear-nuevo"
+          data-id="${grupo.id}"
+        >
+          Crear como nuevo
+        </button>
+
+        <button
+          class="imp-secondary"
+          data-act="editar"
+          data-id="${grupo.id}"
+        >
+          Editar antes
+        </button>
+
+      </div>
+
+    </article>
+
+  `;
+
+}
+
+
+/* =========================================================
+   FILA COMERCIO
+========================================================= */
+
+function renderFilaGrupo(
+  grupo
+) {
+
+  let estadoTexto =
+    'Nuevo';
+
+
+  if (
+    grupo.omitir
+  ) {
+
+    estadoTexto =
+      'No importar';
+
+  } else if (
+    grupo.base &&
+    grupo.decisionBase ===
+    'unir'
+  ) {
+
+    estadoTexto =
+      `Unir con #${grupo.base.existente.id}`;
+
+  } else if (
+    grupo.base &&
+    !grupo.decisionBase
+  ) {
+
+    estadoTexto =
+      'Revisar coincidencia';
+
+  } else if (
+    tieneCoordenadas(
+      grupo.principal
+    )
+  ) {
+
+    estadoTexto =
+      'Nuevo · activo';
+
+  } else {
+
+    estadoTexto =
+      'Nuevo · sin coordenadas';
+
+  }
+
+
+  return `
+
+    <tr
+      class="${
+        grupo.omitir
+          ? 'imp-row-omit'
+          : ''
+      }"
+    >
+
+      <td>
+
+        <strong>
+          ${
+            esc(
+              grupo
+                .principal
+                .nombre
+            )
+          }
+        </strong>
+
+        <small>
+          ${
+            esc(
+              grupo
+                .principal
+                .rubro ||
+              ''
+            )
+          }
+        </small>
+
+      </td>
+
+
+      <td>
+        ${
+          esc(
+            grupo
+              .principal
+              .localidad ||
+            ''
+          )
+        }
+      </td>
+
+
+      <td>
+        ${
+          esc(
+            grupo
+              .principal
+              .direccion ||
+            ''
+          )
+        }
+      </td>
+
+
+      <td>
+
+        <div class="imp-program-tags">
+
+          ${
+            grupo.adhesiones.length
+
+              ? grupo
+                  .adhesiones
+                  .map(
+                    adhesion => `
+
+                      <span>
+                        ${
+                          esc(
+                            programaNombre(
+                              adhesion.programa
+                            )
+                          )
+                        }
+                      </span>
+
+                    `
+                  )
+                  .join('')
+
+              : '<span class="empty">Sin programa</span>'
+          }
+
+        </div>
+
+      </td>
+
+
+      <td>
+
+        <span class="imp-state-pill">
+          ${esc(estadoTexto)}
+        </span>
+
+      </td>
+
+
+      <td class="imp-row-actions">
+
+        <button
+          data-act="editar"
+          data-id="${grupo.id}"
+        >
+          Editar
+        </button>
+
+        <button
+          data-act="omitir"
+          data-id="${grupo.id}"
+        >
+          ${
+            grupo.omitir
+              ? 'Incluir'
+              : 'No importar'
+          }
+        </button>
+
+      </td>
+
+    </tr>
+
+  `;
+
+}
+
+
+/* =========================================================
+   EVENTOS RESULTADO
+========================================================= */
+
+function conectarResultado() {
+
+  document
+    .querySelector(
+      '#imp-cerrar'
+    )
+    ?.addEventListener(
+      'click',
+      cerrarImportador
+    );
+
+
+  document
+    .querySelector(
+      '#imp-volver-mapeo'
+    )
+    ?.addEventListener(
+      'click',
+      renderMapeo
+    );
+
+
+  document
+    .querySelector(
+      '#imp-confirmar'
+    )
+    ?.addEventListener(
+      'click',
+      confirmarImportacion
+    );
+
+
+  overlay()
+    ?.querySelectorAll(
+      '[data-act]'
+    )
+    .forEach(
+      boton => {
+
+        boton.addEventListener(
+          'click',
+          () => {
+
+            const accion =
+              boton.dataset.act;
+
+
+            const id =
+              boton.dataset.id;
+
+
+            if (
+              accion ===
+              'unir-archivo'
+            ) {
+
+              const posible =
+                estado
+                  .analisis
+                  .posibles
+                  .find(
+                    item =>
+                      item.id === id
+                  );
+
+
+              if (posible) {
+
+                fusionarGrupos(
+                  posible.a,
+                  posible.b
+                );
+
+
+                posible.resuelto =
+                  true;
+
+
+                posible.decision =
+                  'unidos';
+
+
+                renderResultado();
+
+              }
+
+            }
+
+
+            if (
+              accion ===
+              'separar-archivo'
+            ) {
+
+              const posible =
+                estado
+                  .analisis
+                  .posibles
+                  .find(
+                    item =>
+                      item.id === id
+                  );
+
+
+              if (posible) {
+
+                posible.resuelto =
+                  true;
+
+
+                posible.decision =
+                  'separados';
+
+
+                renderResultado();
+
+              }
+
+            }
+
+
+            if (
+              accion ===
+              'unir-base'
+            ) {
+
+              const grupo =
+                grupoPorId(
+                  id
+                );
+
+
+              if (grupo) {
+
+                grupo.decisionBase =
+                  'unir';
+
+
+                renderResultado();
+
+              }
+
+            }
+
+
+            if (
+              accion ===
+              'crear-nuevo'
+            ) {
+
+              const grupo =
+                grupoPorId(
+                  id
+                );
+
+
+              if (grupo) {
+
+                grupo.decisionBase =
+                  'crear';
+
+
+                renderResultado();
+
+              }
+
+            }
+
+
+            if (
+              accion ===
+              'editar'
+            ) {
+
+              abrirEditor(
+                id
+              );
+
+            }
+
+
+            if (
+              accion ===
+              'omitir'
+            ) {
+
+              const grupo =
+                grupoPorId(
+                  id
+                );
+
+
+              if (grupo) {
+
+                grupo.omitir =
+                  !grupo.omitir;
+
+
+                renderResultado();
+
+              }
+
+            }
+
+          }
+        );
+
+      }
+    );
+
+}
+
+
+/* =========================================================
+   RESULTADO / REVISIÓN
+========================================================= */
+
+function renderResultado() {
+
+  const contenedor =
+    overlay();
+
+
+  const analisis =
+    estado.analisis;
+
+
+  if (
+    !contenedor ||
+    !analisis
+  ) {
+
+    return;
+
+  }
+
+
+  const pendientesArchivo =
+    paresPendientes();
+
+
+  const pendientesBase =
+    basesPendientes();
+
+
+  const pendientesConflictos =
+    conflictosPendientes();
+
+
+  const sinCoordenadas =
+    analisis.grupos
+      .filter(
+        grupo =>
+          !grupo.omitir &&
+          grupo.decisionBase !==
+          'unir' &&
+          !tieneCoordenadas(
+            grupo.principal
+          )
+      )
+      .length;
+
+
+  const pendientes =
+    pendientesArchivo.length +
+    pendientesBase.length +
+    pendientesConflictos.length;
+
+
+  const omitidos =
+    analisis.grupos
+      .filter(
+        grupo =>
+          grupo.omitir
+      )
+      .length;
+
+
+  const puedeImportar =
+    pendientes === 0 &&
+    analisis.grupos.some(
+      grupo =>
+        !grupo.omitir
+    );
+
+
+  contenedor.innerHTML = `
 
     <section class="imp-modal imp-modal-large">
 
@@ -2948,20 +4397,19 @@ function renderResultado() {
         <div>
 
           <span>
-            PASO 2 DE 2
+            PASO 2 DE 3
           </span>
 
           <h2>
-            Resultado del análisis
+            Revisar antes de importar
           </h2>
 
           <p>
-            Todavía no se modificó
-            la base de Supabase.
+            Editá los datos y resolvé
+            las coincidencias marcadas.
           </p>
 
         </div>
-
 
         <button
           id="imp-cerrar"
@@ -2975,43 +4423,88 @@ function renderResultado() {
 
       <div class="imp-summary-grid">
 
-        ${resumenCard(
-          'Filas válidas',
-          registros.length
-        )}
+        ${
+          resumenCard(
+            'Filas válidas',
+            analisis.registros.length
+          )
+        }
 
-        ${resumenCard(
-          'Comercios detectados',
-          grupos.length
-        )}
+        ${
+          resumenCard(
+            'Comercios',
+            analisis.grupos.length
+          )
+        }
 
-        ${resumenCard(
-          'Adhesiones',
-          adhesiones
-        )}
+        ${
+          resumenCard(
+            'Adhesiones',
+            cantidadAdhesiones()
+          )
+        }
 
-        ${resumenCard(
-          'Agrupados automáticamente',
-          duplicadosAgrupados.length
-        )}
+        ${
+          resumenCard(
+            'Pendientes',
+            pendientes,
+            pendientes
+              ? 'warn'
+              : ''
+          )
+        }
 
-        ${resumenCard(
-          'Posibles duplicados',
-          posibles.length +
-          coincidenciasBase.length
-        )}
+        ${
+          resumenCard(
+            'Sin coordenadas',
+            sinCoordenadas,
+            sinCoordenadas
+              ? 'warn'
+              : ''
+          )
+        }
 
-        ${resumenCard(
-          'Errores a revisar',
-          errores.length +
-          conflictos.length
-        )}
+        ${
+          resumenCard(
+            'No importar',
+            omitidos
+          )
+        }
 
       </div>
 
 
       ${
-        duplicadosAgrupados.length
+        sinCoordenadas
+          ? `
+
+            <div class="imp-warning">
+
+              <strong>
+
+                ${sinCoordenadas}
+                comercio(s) no tienen
+                coordenadas válidas.
+
+              </strong>
+
+              Se pueden importar igual,
+              pero los comercios nuevos
+              quedarán
+              <b>inactivos</b>
+              para no romper el mapa público.
+
+              Después los ubicamos y activamos.
+
+            </div>
+
+          `
+          : ''
+      }
+
+
+      ${
+        pendientesArchivo.length
           ? `
 
             <div class="imp-result-section">
@@ -3019,13 +4512,14 @@ function renderResultado() {
               <div class="imp-section-title">
 
                 <h3>
-                  Coincidencias de alta confianza
+                  Duplicados posibles
+                  dentro del archivo
                 </h3>
 
                 <p>
-                  Estos registros parecen ser
-                  el mismo comercio y fueron
-                  agrupados en la vista previa.
+                  Elegí si son el mismo
+                  comercio o si deben
+                  quedar separados.
                 </p>
 
               </div>
@@ -3034,16 +4528,9 @@ function renderResultado() {
               <div class="imp-detection-list">
 
                 ${
-                  duplicadosAgrupados
-                    .slice(
-                      0,
-                      30
-                    )
+                  pendientesArchivo
                     .map(
-                      grupo =>
-                        renderGrupo(
-                          grupo
-                        )
+                      renderPosibleArchivo
                     )
                     .join('')
                 }
@@ -3058,10 +4545,7 @@ function renderResultado() {
 
 
       ${
-        (
-          posibles.length ||
-          coincidenciasBase.length
-        )
+        pendientesBase.length
           ? `
 
             <div class="imp-result-section">
@@ -3069,12 +4553,14 @@ function renderResultado() {
               <div class="imp-section-title">
 
                 <h3>
-                  Posibles duplicados para revisar
+                  Coincidencias con
+                  la base actual
                 </h3>
 
                 <p>
-                  No los unimos automáticamente
-                  porque necesitamos confirmación.
+                  Decidí si actualizamos
+                  el comercio existente
+                  o creamos uno nuevo.
                 </p>
 
               </div>
@@ -3083,38 +4569,9 @@ function renderResultado() {
               <div class="imp-detection-list">
 
                 ${
-                  posibles
-                    .slice(
-                      0,
-                      20
-                    )
+                  pendientesBase
                     .map(
-                      item =>
-                        renderPosible(
-                          item.a,
-                          item.b,
-                          item.comparacion,
-                          'Dentro del archivo'
-                        )
-                    )
-                    .join('')
-                }
-
-
-                ${
-                  coincidenciasBase
-                    .slice(
-                      0,
-                      20
-                    )
-                    .map(
-                      item =>
-                        renderPosible(
-                          item.importado,
-                          item.existente,
-                          item.comparacion,
-                          'Ya existe en la base'
-                        )
+                      renderCoincidenciaBase
                     )
                     .join('')
                 }
@@ -3129,10 +4586,7 @@ function renderResultado() {
 
 
       ${
-        (
-          errores.length ||
-          conflictos.length
-        )
+        pendientesConflictos.length
           ? `
 
             <div class="imp-result-section">
@@ -3140,8 +4594,16 @@ function renderResultado() {
               <div class="imp-section-title">
 
                 <h3>
-                  Datos que requieren revisión
+                  Beneficios en conflicto
                 </h3>
+
+                <p>
+                  El mismo comercio tiene
+                  dos textos diferentes
+                  para un mismo programa.
+                  Entrá a Editar y elegí
+                  el definitivo.
+                </p>
 
               </div>
 
@@ -3149,10 +4611,114 @@ function renderResultado() {
               <div class="imp-errors">
 
                 ${
-                  errores
+                  pendientesConflictos
+                    .map(
+                      grupo => `
+
+                        <div>
+
+                          <strong>
+                            ${
+                              esc(
+                                grupo
+                                  .principal
+                                  .nombre
+                              )
+                            }
+                          </strong>
+
+                          <span>
+
+                            ${
+                              grupo
+                                .conflictos
+                                .map(
+                                  conflicto => `
+
+                                    ${
+                                      esc(
+                                        programaNombre(
+                                          conflicto.programa
+                                        )
+                                      )
+                                    }:
+
+                                    “${
+                                      esc(
+                                        conflicto
+                                          .anterior
+                                          .beneficio
+                                      )
+                                    }”
+
+                                    /
+
+                                    “${
+                                      esc(
+                                        conflicto
+                                          .nuevo
+                                          .beneficio
+                                      )
+                                    }”
+
+                                  `
+                                )
+                                .join('<br>')
+                            }
+
+                          </span>
+
+                          <button
+                            data-act="editar"
+                            data-id="${grupo.id}"
+                          >
+                            Editar comercio
+                          </button>
+
+                        </div>
+
+                      `
+                    )
+                    .join('')
+                }
+
+              </div>
+
+            </div>
+
+          `
+          : ''
+      }
+
+
+      ${
+        analisis.errores.length
+          ? `
+
+            <div class="imp-result-section">
+
+              <div class="imp-section-title">
+
+                <h3>
+                  Filas que requieren atención
+                </h3>
+
+                <p>
+                  No bloquean la importación,
+                  pero conviene revisarlas.
+                </p>
+
+              </div>
+
+
+              <div class="imp-errors">
+
+                ${
+                  analisis
+                    .errores
                     .slice(
                       0,
-                      40
+                      80
                     )
                     .map(
                       error => `
@@ -3162,61 +4728,11 @@ function renderResultado() {
                           <strong>
                             Fila ${error.fila}
                             ·
-                            ${escapar(error.tipo)}
+                            ${esc(error.tipo)}
                           </strong>
 
                           <span>
-                            ${escapar(error.detalle)}
-                          </span>
-
-                        </div>
-
-                      `
-                    )
-                    .join('')
-                }
-
-
-                ${
-                  conflictos
-                    .slice(
-                      0,
-                      40
-                    )
-                    .map(
-                      conflicto => `
-
-                        <div>
-
-                          <strong>
-                            Fila ${conflicto.fila}
-                            · Beneficios diferentes
-                          </strong>
-
-                          <span>
-
-                            ${
-                              escapar(
-                                nombrePrograma(
-                                  conflicto.programa
-                                )
-                              )
-                            }:
-
-                            ${
-                              escapar(
-                                conflicto.anterior.beneficio
-                              )
-                            }
-
-                            /
-
-                            ${
-                              escapar(
-                                conflicto.nuevo.beneficio
-                              )
-                            }
-
+                            ${esc(error.detalle)}
                           </span>
 
                         </div>
@@ -3240,11 +4756,12 @@ function renderResultado() {
         <div class="imp-section-title">
 
           <h3>
-            Vista previa de comercios
+            Comercios a importar
           </h3>
 
           <p>
-            Primeros 100 registros agrupados.
+            Podés editar cualquier registro
+            o excluirlo de esta importación.
           </p>
 
         </div>
@@ -3275,7 +4792,11 @@ function renderResultado() {
                 </th>
 
                 <th>
-                  Registros
+                  Estado
+                </th>
+
+                <th>
+                  Acciones
                 </th>
 
               </tr>
@@ -3286,94 +4807,9 @@ function renderResultado() {
             <tbody>
 
               ${
-                grupos
-                  .slice(
-                    0,
-                    100
-                  )
+                analisis.grupos
                   .map(
-                    grupo => `
-
-                      <tr>
-
-                        <td>
-
-                          <strong>
-                            ${
-                              escapar(
-                                grupo.principal.nombre
-                              )
-                            }
-                          </strong>
-
-                          <small>
-                            ${
-                              escapar(
-                                grupo.principal.rubro ||
-                                ''
-                              )
-                            }
-                          </small>
-
-                        </td>
-
-                        <td>
-                          ${
-                            escapar(
-                              grupo.principal.localidad ||
-                              ''
-                            )
-                          }
-                        </td>
-
-                        <td>
-                          ${
-                            escapar(
-                              grupo.principal.direccion ||
-                              ''
-                            )
-                          }
-                        </td>
-
-                        <td>
-
-                          <div class="imp-program-tags">
-
-                            ${
-                              grupo.adhesiones.length
-                                ? grupo.adhesiones
-                                    .map(
-                                      adhesion => `
-
-                                        <span>
-                                          ${
-                                            escapar(
-                                              nombrePrograma(
-                                                adhesion.programa
-                                              )
-                                            )
-                                          }
-                                        </span>
-
-                                      `
-                                    )
-                                    .join('')
-                                : '<span class="empty">Sin programa</span>'
-                            }
-
-                          </div>
-
-                        </td>
-
-                        <td>
-                          ${
-                            grupo.variantes.length
-                          }
-                        </td>
-
-                      </tr>
-
-                    `
+                    renderFilaGrupo
                   )
                   .join('')
               }
@@ -3398,11 +4834,23 @@ function renderResultado() {
 
 
         <button
+          id="imp-confirmar"
           class="imp-primary"
-          disabled
-          title="Primero vamos a validar el análisis."
+          ${
+            puedeImportar
+              ? ''
+              : 'disabled'
+          }
         >
-          Confirmar importación
+
+          ${
+            puedeImportar
+
+              ? 'Confirmar importación'
+
+              : `Resolver ${pendientes} pendiente(s)`
+          }
+
         </button>
 
       </div>
@@ -3410,10 +4858,9 @@ function renderResultado() {
 
       <p class="imp-next-note">
 
-        El botón de importar está deshabilitado
-        a propósito. Primero comprobamos que
-        la detección funcione correctamente
-        con tus listados.
+        Los cambios recién se escriben
+        en Supabase cuando confirmás
+        el último botón.
 
       </p>
 
@@ -3422,297 +4869,1425 @@ function renderResultado() {
   `;
 
 
-  conectarCerrar();
+  conectarResultado();
+
+}
+
+
+/* =========================================================
+   EDITAR COMERCIO
+========================================================= */
+
+function abrirEditor(
+  id
+) {
+
+  const grupo =
+    grupoPorId(
+      id
+    );
+
+
+  if (!grupo) {
+    return;
+  }
 
 
   document
     .querySelector(
-      '#imp-volver-mapeo'
+      '#imp-editor-layer'
     )
-    .addEventListener(
-      'click',
-      renderMapeo
+    ?.remove();
+
+
+  const layer =
+    document.createElement(
+      'div'
     );
 
-}
+
+  layer.id =
+    'imp-editor-layer';
 
 
-/* =========================================================
-   TARJETA RESUMEN
-========================================================= */
-
-function resumenCard(
-  titulo,
-  valor
-) {
-
-  return `
-
-    <article>
-
-      <span>
-        ${titulo}
-      </span>
-
-      <strong>
-        ${Number(valor || 0)
-          .toLocaleString(
-            'es-AR'
-          )}
-      </strong>
-
-    </article>
-
-  `;
-
-}
+  layer.className =
+    'imp-editor-layer';
 
 
-/* =========================================================
-   GRUPO AGRUPADO
-========================================================= */
+  layer.innerHTML = `
 
-function renderGrupo(
-  grupo
-) {
+    <section class="imp-editor">
 
-  return `
+      <header class="imp-header">
 
-    <article class="imp-detection-card high">
+        <div>
 
-      <div class="imp-detection-status">
-        ALTA CONFIANZA
-      </div>
+          <span>
+            EDITAR COMERCIO
+          </span>
+
+          <h2>
+            ${
+              esc(
+                grupo
+                  .principal
+                  .nombre
+              )
+            }
+          </h2>
+
+          <p>
+            Lo que guardes acá será
+            lo que use la importación.
+          </p>
+
+        </div>
+
+        <button
+          id="imp-editor-cerrar"
+          class="imp-close"
+        >
+          ×
+        </button>
+
+      </header>
 
 
-      <strong>
-        ${
-          escapar(
-            grupo.principal.nombre
-          )
-        }
-      </strong>
+      <form id="imp-editor-form">
+
+        <div class="imp-map-grid imp-editor-grid">
+
+          ${
+            [
+              'nombre',
+              'rubro',
+              'localidad',
+              'direccion',
+              'telefono',
+              'horario',
+              'lat',
+              'lng',
+            ]
+              .map(
+                key => `
+
+                  <label>
+
+                    ${
+                      esc(
+                        CAMPOS.find(
+                          campo =>
+                            campo.key === key
+                        )
+                        ?.label ||
+                        key
+                      )
+                    }
+
+                    <input
+                      id="edit-${key}"
+                      value="${
+                        esc(
+                          grupo
+                            .principal[
+                              key
+                            ] ||
+                          ''
+                        )
+                      }"
+                      ${
+                        key ===
+                        'nombre'
+                          ? 'required'
+                          : ''
+                      }
+                    />
+
+                  </label>
+
+                `
+              )
+              .join('')
+          }
+
+        </div>
 
 
-      <p>
+        <div class="imp-section">
 
-        ${
-          grupo.variantes.length
-        }
+          <div class="imp-section-title">
 
-        registros detectados
-        como un mismo comercio.
+            <h3>
+              Beneficios por programa
+            </h3>
 
-      </p>
+            <p>
+              Activá solamente los programas
+              que correspondan.
+            </p>
+
+          </div>
 
 
-      <div class="imp-variants">
+          <div class="imp-benefit-editor">
 
-        ${
-          grupo.variantes
-            .map(
-              variante => `
+            ${
+              PROGRAMAS
+                .map(
+                  programa => {
 
-                <span>
+                    const adhesion =
+                      grupo
+                        .adhesiones
+                        .find(
+                          item =>
+                            item.programa ===
+                            programa.id
+                        );
 
-                  Fila ${variante.fila}
-                  ·
 
-                  ${
-                    escapar(
-                      variante.nombre
-                    )
+                    return `
+
+                      <article>
+
+                        <label class="imp-check">
+
+                          <input
+                            type="checkbox"
+                            id="edit-act-${programa.id}"
+                            ${
+                              adhesion
+                                ? 'checked'
+                                : ''
+                            }
+                          />
+
+                          <strong>
+                            ${esc(programa.nombre)}
+                          </strong>
+
+                        </label>
+
+
+                        <label>
+
+                          Beneficio
+
+                          <input
+                            id="edit-ben-${programa.id}"
+                            value="${
+                              esc(
+                                adhesion
+                                  ?.beneficio ||
+                                ''
+                              )
+                            }"
+                            placeholder="Ej: 15% de descuento"
+                          />
+
+                        </label>
+
+
+                        <label>
+
+                          Condiciones
+
+                          <textarea
+                            id="edit-cond-${programa.id}"
+                            placeholder="Días, topes, productos, etc."
+                          >${
+                            esc(
+                              adhesion
+                                ?.condiciones ||
+                              ''
+                            )
+                          }</textarea>
+
+                        </label>
+
+                      </article>
+
+                    `;
+
                   }
+                )
+                .join('')
+            }
 
-                </span>
+          </div>
 
-              `
-            )
-            .join('')
-        }
+        </div>
 
-      </div>
 
-    </article>
+        <div class="imp-actions">
+
+          <button
+            type="button"
+            id="imp-editor-cancelar"
+            class="imp-secondary"
+          >
+            Cancelar
+          </button>
+
+          <button
+            type="submit"
+            class="imp-primary"
+          >
+            Guardar cambios
+          </button>
+
+        </div>
+
+      </form>
+
+    </section>
 
   `;
 
-}
 
-
-/* =========================================================
-   POSIBLE DUPLICADO
-========================================================= */
-
-function renderPosible(
-  a,
-  b,
-  comparacion,
-  origen
-) {
-
-  const porcentaje =
-    Math.round(
-      comparacion.puntaje *
-      100
+  document.body
+    .appendChild(
+      layer
     );
 
 
-  return `
-
-    <article class="imp-detection-card possible">
-
-      <div class="imp-detection-status">
-        ${escapar(origen)}
-        ·
-        ${porcentaje}%
-      </div>
+  const cerrar =
+    () =>
+      layer.remove();
 
 
-      <div class="imp-compare">
-
-        <div>
-
-          <small>
-            REGISTRO A
-          </small>
-
-          <strong>
-            ${escapar(a.nombre)}
-          </strong>
-
-          <span>
-            ${
-              escapar(
-                a.direccion ||
-                ''
-              )
-            }
-          </span>
-
-        </div>
-
-
-        <div class="imp-vs">
-          ≈
-        </div>
-
-
-        <div>
-
-          <small>
-            REGISTRO B
-          </small>
-
-          <strong>
-            ${escapar(b.nombre)}
-          </strong>
-
-          <span>
-            ${
-              escapar(
-                b.direccion ||
-                ''
-              )
-            }
-          </span>
-
-        </div>
-
-      </div>
-
-
-      <div class="imp-match-reasons">
-
-        ${
-          comparacion.mismoTelefono
-            ? '<span>✓ mismo teléfono</span>'
-            : ''
-        }
-
-        ${
-          comparacion.mismaDireccion
-            ? '<span>✓ misma dirección</span>'
-            : ''
-        }
-
-        ${
-          comparacion.mismaLocalidad
-            ? '<span>✓ misma localidad</span>'
-            : ''
-        }
-
-      </div>
-
-    </article>
-
-  `;
-
-}
-
-
-/* =========================================================
-   CERRAR
-========================================================= */
-
-function conectarCerrar() {
-
-  const boton =
-    document.querySelector(
-      '#imp-cerrar'
-    );
-
-
-  if (boton) {
-
-    boton.addEventListener(
+  document
+    .querySelector(
+      '#imp-editor-cerrar'
+    )
+    ?.addEventListener(
       'click',
-      cerrarImportador
-    );
-
-  }
-
-
-  const overlay =
-    document.querySelector(
-      '#importador-overlay'
+      cerrar
     );
 
 
-  if (overlay) {
-
-    overlay.addEventListener(
+  document
+    .querySelector(
+      '#imp-editor-cancelar'
+    )
+    ?.addEventListener(
       'click',
+      cerrar
+    );
+
+
+  layer.addEventListener(
+    'click',
+    event => {
+
+      if (
+        event.target ===
+        layer
+      ) {
+
+        cerrar();
+
+      }
+
+    }
+  );
+
+
+  document
+    .querySelector(
+      '#imp-editor-form'
+    )
+    ?.addEventListener(
+      'submit',
       event => {
 
-        if (
-          event.target ===
-          overlay
-        ) {
+        event.preventDefault();
 
-          cerrarImportador();
+
+        const nombre =
+          limpiar(
+            document
+              .querySelector(
+                '#edit-nombre'
+              )
+              ?.value
+          );
+
+
+        if (!nombre) {
+
+          alert(
+            'El nombre del comercio es obligatorio.'
+          );
+
+
+          return;
 
         }
+
+
+        for (
+          const key
+          of [
+            'nombre',
+            'rubro',
+            'localidad',
+            'direccion',
+            'telefono',
+            'horario',
+            'lat',
+            'lng',
+          ]
+        ) {
+
+          grupo.principal[
+            key
+          ] =
+            limpiar(
+              document
+                .querySelector(
+                  `#edit-${key}`
+                )
+                ?.value
+            );
+
+        }
+
+
+        const adhesiones = [];
+
+
+        for (
+          const programa
+          of PROGRAMAS
+        ) {
+
+          const activo =
+            document
+              .querySelector(
+                `#edit-act-${programa.id}`
+              )
+              ?.checked;
+
+
+          if (!activo) {
+            continue;
+          }
+
+
+          const beneficio =
+            limpiar(
+              document
+                .querySelector(
+                  `#edit-ben-${programa.id}`
+                )
+                ?.value
+            );
+
+
+          const condiciones =
+            limpiar(
+              document
+                .querySelector(
+                  `#edit-cond-${programa.id}`
+                )
+                ?.value
+            );
+
+
+          if (!beneficio) {
+
+            alert(
+              `Completá el beneficio de ${programa.nombre} o desmarcá ese programa.`
+            );
+
+
+            return;
+
+          }
+
+
+          adhesiones.push({
+
+            programa:
+              programa.id,
+
+            beneficio,
+
+            condiciones,
+
+          });
+
+        }
+
+
+        grupo.adhesiones =
+          adhesiones;
+
+
+        grupo.conflictos =
+          [];
+
+
+        asignarBaseGrupo(
+          grupo,
+          estado
+            .analisis
+            .existentes
+        );
+
+
+        cerrar();
+
+
+        renderResultado();
 
       }
     );
 
+}
+
+
+/* =========================================================
+   API SUPABASE
+========================================================= */
+
+async function api(
+  path,
+  {
+    method = 'GET',
+    body,
+    prefer = '',
+  } = {}
+) {
+
+  const {
+    url,
+    key,
+    token,
+  } =
+    credenciales();
+
+
+  if (
+    !url ||
+    !key
+  ) {
+
+    throw new Error(
+      'Faltan VITE_SUPABASE_URL o VITE_SUPABASE_KEY.'
+    );
+
   }
+
+
+  if (!token) {
+
+    throw new Error(
+      'La sesión de administrador venció. Cerrá y volvé a entrar a /admin.'
+    );
+
+  }
+
+
+  const headers = {
+
+    apikey:
+      key,
+
+    Authorization:
+      `Bearer ${token}`,
+
+  };
+
+
+  if (
+    body !== undefined
+  ) {
+
+    headers[
+      'Content-Type'
+    ] =
+      'application/json';
+
+  }
+
+
+  if (
+    prefer
+  ) {
+
+    headers.Prefer =
+      prefer;
+
+  }
+
+
+  const respuesta =
+    await fetch(
+
+      `${url}${path}`,
+
+      {
+
+        method,
+
+        headers,
+
+        body:
+          body === undefined
+            ? undefined
+            : JSON.stringify(
+                body
+              ),
+
+      }
+
+    );
+
+
+  if (
+    !respuesta.ok
+  ) {
+
+    let detalle = '';
+
+
+    try {
+
+      const json =
+        await respuesta.json();
+
+
+      detalle =
+        json.message ||
+        json.details ||
+        json.hint ||
+        JSON.stringify(
+          json
+        );
+
+    } catch {
+
+      detalle =
+        await respuesta.text();
+
+    }
+
+
+    if (
+      respuesta.status ===
+      401
+    ) {
+
+      throw new Error(
+        'La sesión de administrador venció. Volvé a iniciar sesión.'
+      );
+
+    }
+
+
+    throw new Error(
+      detalle ||
+      `Error ${respuesta.status}`
+    );
+
+  }
+
+
+  if (
+    respuesta.status ===
+    204
+  ) {
+
+    return null;
+
+  }
+
+
+  const texto =
+    await respuesta.text();
+
+
+  return texto
+    ? JSON.parse(
+        texto
+      )
+    : null;
 
 }
 
 
-function cerrarImportador() {
+/* =========================================================
+   CÓDIGO ESTABLE DE IMPORTACIÓN
+========================================================= */
 
-  const existente =
-    document.querySelector(
-      '#importador-overlay'
+function hashTexto(
+  texto
+) {
+
+  let hash =
+    2166136261;
+
+
+  for (
+    let i = 0;
+    i < texto.length;
+    i++
+  ) {
+
+    hash ^=
+      texto.charCodeAt(
+        i
+      );
+
+
+    hash =
+      Math.imul(
+        hash,
+        16777619
+      );
+
+  }
+
+
+  return (
+    hash >>>
+    0
+  )
+    .toString(16)
+    .padStart(
+      8,
+      '0'
+    );
+
+}
+
+
+function codigoGrupo(
+  grupo
+) {
+
+  const identidad = [
+
+    norm(
+      grupo
+        .principal
+        .nombre
+    ),
+
+    norm(
+      grupo
+        .principal
+        .direccion
+    ),
+
+    norm(
+      grupo
+        .principal
+        .localidad
+    ),
+
+    tel(
+      grupo
+        .principal
+        .telefono
+    ),
+
+    grupo
+      .principal
+      .fila,
+
+  ]
+    .join('|');
+
+
+  return (
+    'MTA-' +
+    hashTexto(
+      identidad
+    )
+      .toUpperCase()
+  );
+
+}
+
+
+/* =========================================================
+   LOTES
+========================================================= */
+
+function chunks(
+  lista,
+  cantidad
+) {
+
+  const resultado = [];
+
+
+  for (
+    let i = 0;
+    i < lista.length;
+    i += cantidad
+  ) {
+
+    resultado.push(
+      lista.slice(
+        i,
+        i +
+        cantidad
+      )
+    );
+
+  }
+
+
+  return resultado;
+
+}
+
+
+/* =========================================================
+   PAYLOAD COMERCIO
+========================================================= */
+
+function payloadNuevo(
+  grupo
+) {
+
+  const coordenadas =
+    tieneCoordenadas(
+      grupo.principal
     );
 
 
-  if (existente) {
+  return {
 
-    existente.remove();
+    codigo:
+      codigoGrupo(
+        grupo
+      ),
+
+    nombre:
+      limpiar(
+        grupo
+          .principal
+          .nombre
+      ),
+
+    rubro:
+      limpiar(
+        grupo
+          .principal
+          .rubro
+      ),
+
+    localidad:
+      limpiar(
+        grupo
+          .principal
+          .localidad
+      ),
+
+    direccion:
+      limpiar(
+        grupo
+          .principal
+          .direccion
+      ),
+
+    telefono:
+      limpiar(
+        grupo
+          .principal
+          .telefono
+      ) ||
+      null,
+
+    horario:
+      limpiar(
+        grupo
+          .principal
+          .horario
+      ) ||
+      null,
+
+    lat:
+      coordenadas
+        ? numero(
+            grupo
+              .principal
+              .lat
+          )
+        : null,
+
+    lng:
+      coordenadas
+        ? numero(
+            grupo
+              .principal
+              .lng
+          )
+        : null,
+
+    /*
+      Si no tiene ubicación,
+      queda inactivo para no romper
+      el mapa público.
+    */
+
+    activo:
+      coordenadas,
+
+    updated_at:
+      new Date()
+        .toISOString(),
+
+  };
+
+}
+
+
+/* =========================================================
+   CONFIRMAR IMPORTACIÓN
+========================================================= */
+
+async function confirmarImportacion() {
+
+  const analisis =
+    estado.analisis;
+
+
+  if (!analisis) {
+    return;
+  }
+
+
+  const pendientes =
+    paresPendientes().length +
+    basesPendientes().length +
+    conflictosPendientes().length;
+
+
+  if (
+    pendientes
+  ) {
+
+    alert(
+      `Todavía hay ${pendientes} pendiente(s) por resolver.`
+    );
+
+
+    return;
+
+  }
+
+
+  const grupos =
+    analisis.grupos
+      .filter(
+        grupo =>
+          !grupo.omitir
+      );
+
+
+  if (
+    !grupos.length
+  ) {
+
+    alert(
+      'No hay comercios seleccionados para importar.'
+    );
+
+
+    return;
+
+  }
+
+
+  const sinCoordenadas =
+    grupos
+      .filter(
+        grupo =>
+          grupo.decisionBase !==
+          'unir' &&
+          !tieneCoordenadas(
+            grupo.principal
+          )
+      )
+      .length;
+
+
+  const mensaje = `Se van a procesar ${grupos.length} comercios y ${cantidadAdhesiones()} beneficios.${
+    sinCoordenadas
+      ? `\n\n${sinCoordenadas} comercio(s) nuevos sin coordenadas quedarán inactivos hasta ubicarlos.`
+      : ''
+  }\n\n¿Confirmás la importación?`;
+
+
+  if (
+    !confirm(
+      mensaje
+    )
+  ) {
+
+    return;
+
+  }
+
+
+  renderImportando(
+    'Preparando comercios...'
+  );
+
+
+  try {
+
+    const ids =
+      new Map();
+
+
+    /*
+      Comercios que son nuevos.
+    */
+
+    const nuevos =
+      grupos
+        .filter(
+          grupo =>
+            grupo.decisionBase !==
+            'unir'
+        );
+
+
+    /*
+      Comercios que el usuario decidió
+      unir con uno existente.
+    */
+
+    const unidos =
+      grupos
+        .filter(
+          grupo =>
+            grupo.decisionBase ===
+            'unir' &&
+            grupo.base
+              ?.existente
+              ?.id
+        );
+
+
+    /* =====================================================
+       ACTUALIZAR EXISTENTES
+    ===================================================== */
+
+    for (
+      const grupo
+      of unidos
+    ) {
+
+      const existente =
+        grupo.base.existente;
+
+
+      const principal =
+        grupo.principal;
+
+
+      const patch = {
+
+        updated_at:
+          new Date()
+            .toISOString(),
+
+      };
+
+
+      for (
+        const key
+        of [
+          'nombre',
+          'rubro',
+          'localidad',
+          'direccion',
+          'telefono',
+          'horario',
+        ]
+      ) {
+
+        if (
+          limpiar(
+            principal[key]
+          )
+        ) {
+
+          patch[key] =
+            limpiar(
+              principal[key]
+            );
+
+        }
+
+      }
+
+
+      if (
+        tieneCoordenadas(
+          principal
+        )
+      ) {
+
+        patch.lat =
+          numero(
+            principal.lat
+          );
+
+
+        patch.lng =
+          numero(
+            principal.lng
+          );
+
+      }
+
+
+      await api(
+
+        `/rest/v1/comercios?id=eq.${encodeURIComponent(existente.id)}`,
+
+        {
+
+          method:
+            'PATCH',
+
+          body:
+            patch,
+
+          prefer:
+            'return=minimal',
+
+        }
+
+      );
+
+
+      ids.set(
+        grupo.id,
+        Number(
+          existente.id
+        )
+      );
+
+    }
+
+
+    /* =====================================================
+       CREAR COMERCIOS NUEVOS
+    ===================================================== */
+
+    let procesados = 0;
+
+
+    for (
+      const lote
+      of chunks(
+        nuevos,
+        100
+      )
+    ) {
+
+      renderImportando(
+
+        `Guardando comercios ${
+          procesados + 1
+        } a ${
+          Math.min(
+            procesados +
+            lote.length,
+            nuevos.length
+          )
+        } de ${nuevos.length}...`
+
+      );
+
+
+      const payload =
+        lote.map(
+          payloadNuevo
+        );
+
+
+      const respuesta =
+        await api(
+
+          '/rest/v1/comercios?on_conflict=codigo&select=id,codigo,nombre',
+
+          {
+
+            method:
+              'POST',
+
+            body:
+              payload,
+
+            prefer:
+              'resolution=merge-duplicates,return=representation',
+
+          }
+
+        );
+
+
+      const porCodigo =
+        new Map(
+
+          (
+            respuesta ||
+            []
+          )
+            .map(
+              comercio => [
+
+                comercio.codigo,
+
+                Number(
+                  comercio.id
+                ),
+
+              ]
+            )
+
+        );
+
+
+      for (
+        const grupo
+        of lote
+      ) {
+
+        const comercioId =
+          porCodigo.get(
+            codigoGrupo(
+              grupo
+            )
+          );
+
+
+        if (
+          !comercioId
+        ) {
+
+          throw new Error(
+            `No se obtuvo el ID de ${grupo.principal.nombre}.`
+          );
+
+        }
+
+
+        ids.set(
+          grupo.id,
+          comercioId
+        );
+
+      }
+
+
+      procesados +=
+        lote.length;
+
+    }
+
+
+    /* =====================================================
+       ARMAR BENEFICIOS
+    ===================================================== */
+
+    const beneficiosMap =
+      new Map();
+
+
+    for (
+      const grupo
+      of grupos
+    ) {
+
+      const comercioId =
+        ids.get(
+          grupo.id
+        );
+
+
+      if (
+        !comercioId
+      ) {
+
+        continue;
+
+      }
+
+
+      for (
+        const beneficio
+        of grupo.adhesiones
+      ) {
+
+        if (
+          !limpiar(
+            beneficio.beneficio
+          )
+        ) {
+
+          continue;
+
+        }
+
+
+        beneficiosMap.set(
+
+          `${comercioId}|${beneficio.programa}`,
+
+          {
+
+            comercio_id:
+              comercioId,
+
+            programa:
+              beneficio.programa,
+
+            beneficio:
+              limpiar(
+                beneficio.beneficio
+              ),
+
+            condiciones:
+              limpiar(
+                beneficio.condiciones
+              ) ||
+              null,
+
+            activo:
+              true,
+
+            updated_at:
+              new Date()
+                .toISOString(),
+
+          }
+
+        );
+
+      }
+
+    }
+
+
+    const beneficios =
+      [
+        ...beneficiosMap
+          .values(),
+      ];
+
+
+    /* =====================================================
+       GUARDAR BENEFICIOS POR LOTES
+    ===================================================== */
+
+    let hechos = 0;
+
+
+    for (
+      const lote
+      of chunks(
+        beneficios,
+        200
+      )
+    ) {
+
+      renderImportando(
+
+        `Guardando beneficios ${
+          hechos + 1
+        } a ${
+          Math.min(
+            hechos +
+            lote.length,
+            beneficios.length
+          )
+        } de ${beneficios.length}...`
+
+      );
+
+
+      await api(
+
+        '/rest/v1/beneficios_comercio?on_conflict=comercio_id,programa',
+
+        {
+
+          method:
+            'POST',
+
+          body:
+            lote,
+
+          prefer:
+            'resolution=merge-duplicates,return=minimal',
+
+        }
+
+      );
+
+
+      hechos +=
+        lote.length;
+
+    }
+
+
+    /* =====================================================
+       TERMINADO
+    ===================================================== */
+
+    renderExito({
+
+      nuevos:
+        nuevos.length,
+
+      unidos:
+        unidos.length,
+
+      beneficios:
+        beneficios.length,
+
+      omitidos:
+        analisis.grupos
+          .filter(
+            grupo =>
+              grupo.omitir
+          )
+          .length,
+
+      sinCoordenadas,
+
+    });
+
+  } catch (error) {
+
+    alert(
+
+      'La importación se detuvo: ' +
+
+      (
+        error?.message ||
+        error
+      ) +
+
+      '\n\nPodés volver a intentar. Los códigos estables evitan duplicar los comercios que ya alcanzó a guardar.'
+
+    );
+
+
+    renderResultado();
 
   }
 
@@ -3720,7 +6295,179 @@ function cerrarImportador() {
 
 
 /* =========================================================
-   INSERTAR BOTÓN EN ADMIN
+   IMPORTANDO
+========================================================= */
+
+function renderImportando(
+  texto
+) {
+
+  const contenedor =
+    overlay();
+
+
+  if (!contenedor) {
+    return;
+  }
+
+
+  contenedor.innerHTML = `
+
+    <section class="imp-modal imp-loading">
+
+      <div class="imp-spinner">
+      </div>
+
+      <strong>
+        Importando...
+      </strong>
+
+      <p>
+        ${esc(texto)}
+      </p>
+
+      <small>
+        No cierres esta ventana
+        hasta que termine.
+      </small>
+
+    </section>
+
+  `;
+
+}
+
+
+/* =========================================================
+   RESULTADO FINAL
+========================================================= */
+
+function renderExito(
+  resultado
+) {
+
+  const contenedor =
+    overlay();
+
+
+  if (!contenedor) {
+    return;
+  }
+
+
+  contenedor.innerHTML = `
+
+    <section class="imp-modal imp-success-screen">
+
+      <div class="imp-success-icon">
+        ✓
+      </div>
+
+      <h2>
+        Importación terminada
+      </h2>
+
+
+      <div class="imp-summary-grid">
+
+        ${
+          resumenCard(
+            'Comercios nuevos',
+            resultado.nuevos
+          )
+        }
+
+        ${
+          resumenCard(
+            'Unidos a existentes',
+            resultado.unidos
+          )
+        }
+
+        ${
+          resumenCard(
+            'Beneficios guardados',
+            resultado.beneficios
+          )
+        }
+
+        ${
+          resumenCard(
+            'No importados',
+            resultado.omitidos
+          )
+        }
+
+        ${
+          resumenCard(
+            'Nuevos inactivos',
+            resultado.sinCoordenadas
+          )
+        }
+
+      </div>
+
+
+      ${
+        resultado.sinCoordenadas
+          ? `
+
+            <div class="imp-warning">
+
+              <strong>
+                Falta ubicar comercios.
+              </strong>
+
+              Los nuevos sin
+              latitud/longitud quedaron
+              inactivos.
+
+              No aparecerán en la app
+              pública hasta que les
+              carguemos coordenadas
+              y los activemos.
+
+            </div>
+
+          `
+          : ''
+      }
+
+
+      <div class="imp-actions">
+
+        <button
+          id="imp-finalizar"
+          class="imp-primary"
+        >
+          Cerrar y actualizar Admin
+        </button>
+
+      </div>
+
+    </section>
+
+  `;
+
+
+  document
+    .querySelector(
+      '#imp-finalizar'
+    )
+    ?.addEventListener(
+      'click',
+      () => {
+
+        window.location.reload();
+
+      }
+    );
+
+}
+
+
+/* =========================================================
+   BOTÓN EN ADMIN
 ========================================================= */
 
 function agregarBotonImportar() {
@@ -3782,19 +6529,17 @@ function agregarBotonImportar() {
 
 const observer =
   new MutationObserver(
-    () => {
-
-      agregarBotonImportar();
-
-    }
+    agregarBotonImportar
   );
 
 
 observer.observe(
   document.body,
   {
-    childList: true,
-    subtree: true,
+    childList:
+      true,
+    subtree:
+      true,
   }
 );
 
