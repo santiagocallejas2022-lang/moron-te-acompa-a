@@ -29,11 +29,7 @@ async function iniciarAplicacion() {
 
 
     /*
-      Primero cargamos el ADMIN.
-
-      Así, aunque el importador tenga
-      algún problema, /admin sigue
-      funcionando.
+      Primero cargamos el admin principal.
     */
 
     await import(
@@ -42,12 +38,10 @@ async function iniciarAplicacion() {
 
 
     /*
-      Después intentamos cargar
-      el importador.
+      Después cargamos módulos opcionales.
 
-      Si falla, mostramos el error
-      en consola pero NO rompemos
-      el panel admin.
+      Si alguno falla, el admin principal
+      igual sigue funcionando.
     */
 
     try {
@@ -60,6 +54,22 @@ async function iniciarAplicacion() {
 
       console.error(
         'Error al cargar el importador:',
+        error
+      );
+
+    }
+
+
+    try {
+
+      await import(
+        './geolocalizador-admin.js'
+      );
+
+    } catch (error) {
+
+      console.error(
+        'Error al cargar el geolocalizador:',
         error
       );
 
