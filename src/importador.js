@@ -263,6 +263,342 @@ function limpiar(
 }
 
 
+/* =========================================================
+   NORMALIZAR RUBROS Y LOCALIDADES
+========================================================= */
+
+function normalizarRubro(
+  valor
+) {
+
+  const original =
+    limpiar(valor)
+      .replace(
+        /\s+/g,
+        ' '
+      );
+
+
+  if (!original) {
+    return '';
+  }
+
+
+  const clave =
+    norm(original);
+
+
+  const equivalencias = {
+
+    'accesorios':
+      'Accesorios',
+
+    'almacen':
+      'Almacén',
+
+    'almacen natural':
+      'Almacén natural',
+
+    'almacen ntural':
+      'Almacén natural',
+
+    'articulos para el hogar':
+      'Artículos para el hogar',
+
+    'automotor':
+      'Automotor',
+
+    'autoservicio':
+      'Autoservicio',
+
+    'barberia':
+      'Barbería',
+
+    'bazar':
+      'Bazar',
+
+    'bebidas':
+      'Bebidas',
+
+    'bicicleteria':
+      'Bicicletería',
+
+    'blanqueria':
+      'Blanquería',
+
+    'calzado':
+      'Calzado',
+
+    'calzados':
+      'Calzado',
+
+    'camping':
+      'Camping',
+
+    'carniceria':
+      'Carnicería',
+
+    'casa electrodomestico':
+      'Electrodomésticos',
+
+    'casa electrodomesticos':
+      'Electrodomésticos',
+
+    'electrodomestico':
+      'Electrodomésticos',
+
+    'electrodomesticos':
+      'Electrodomésticos',
+
+    'centro de belleza':
+      'Centro de belleza',
+
+    'club deportivo':
+      'Club Deportivo',
+
+    'colchoneria':
+      'Colchonería',
+
+    'computacion':
+      'Computación',
+
+    'cosmetica':
+      'Cosmética',
+
+    'despensa':
+      'Despensa',
+
+    'dietetica':
+      'Dietética',
+
+    'espacio cultural':
+      'Espacio cultural',
+
+    'fabrica de pastas':
+      'Fábrica de pastas',
+
+    'farmacia':
+      'Farmacia',
+
+    'ferreteria':
+      'Ferretería',
+
+    'fiambreria':
+      'Fiambrería',
+
+    'gastronomia':
+      'Gastronomía',
+
+    'gastronomico':
+      'Gastronomía',
+
+    'gastronomica':
+      'Gastronomía',
+
+    'gimnasio':
+      'Gimnasio',
+
+    'grafica':
+      'Gráfica',
+
+    'granja':
+      'Granja',
+
+    'granja y almacen':
+      'Granja y Almacén',
+
+    'heladeria':
+      'Heladería',
+
+    'iluminacion':
+      'Iluminación',
+
+    'indumentaria':
+      'Indumentaria',
+
+    'instituto':
+      'Instituto',
+
+    'insumos':
+      'Insumos',
+
+    'joyeria':
+      'Joyería',
+
+    'kiosco despensa':
+      'Kiosco Despensa',
+
+    'lavadero':
+      'Lavadero',
+
+    'libreria':
+      'Librería',
+
+    'limpieza':
+      'Limpieza',
+
+    'marroquineria':
+      'Marroquinería',
+
+    'materiales para el hogar':
+      'Materiales para el hogar',
+
+    'materiales para construccion':
+      'Materiales para construcción',
+
+    'maxikiosco':
+      'Maxikiosco',
+
+    'muebleria':
+      'Mueblería',
+
+    'musica':
+      'Música',
+
+    'optica':
+      'Óptica',
+
+    'ortopedia':
+      'Ortopedia',
+
+    'panaderia':
+      'Panadería',
+
+    'panalera':
+      'Pañalera',
+
+    'papelera':
+      'Papelera',
+
+    'peluqueria':
+      'Peluquería',
+
+    'perfumeria':
+      'Perfumería',
+
+    'pescaderia':
+      'Pescadería',
+
+    'pet shop':
+      'Pet Shop',
+
+    'petshop':
+      'Pet Shop',
+
+    'pintureria':
+      'Pinturería',
+
+    'polirubro':
+      'Polirubro',
+
+    'quimica':
+      'Química',
+
+    'ropa deportiva':
+      'Ropa deportiva',
+
+    'salud':
+      'Salud',
+
+    'sanitarios':
+      'Sanitarios',
+
+    'servicio tecnico':
+      'Servicio Técnico',
+
+    'sexshop':
+      'Sexshop',
+
+    'supermercado':
+      'Supermercado',
+
+    'tatuajes':
+      'Tatuajes',
+
+    'tecnologia':
+      'Tecnología',
+
+    'verduleria':
+      'Verdulería',
+
+    'vinoteca':
+      'Vinoteca',
+
+  };
+
+
+  return (
+    equivalencias[clave] ||
+    original
+  );
+
+}
+
+
+function normalizarLocalidad(
+  valor
+) {
+
+  const original =
+    limpiar(valor)
+      .replace(
+        /\s+/g,
+        ' '
+      );
+
+
+  if (!original) {
+    return '';
+  }
+
+
+  const clave =
+    norm(original);
+
+
+  const equivalencias = {
+
+    'moron':
+      'Morón',
+
+    'moron sur':
+      'Morón',
+
+    'haedo':
+      'Haedo',
+
+    'castelar':
+      'Castelar',
+
+    'castelar sur':
+      'Castelar',
+
+    'catelar sur':
+      'Castelar',
+
+    'el palomar':
+      'El Palomar',
+
+    'palomar':
+      'El Palomar',
+
+    'barrio gaona':
+      'El Palomar',
+
+    'villa sarmiento':
+      'Villa Sarmiento',
+
+  };
+
+
+  return (
+    equivalencias[clave] ||
+    original
+  );
+
+}
+
+
 function esc(
   valor = ''
 ) {
@@ -2475,15 +2811,19 @@ function construirRegistros() {
         nombre,
 
         rubro:
-          valorFila(
-            fila,
-            estado.mapeo.rubro
+          normalizarRubro(
+            valorFila(
+              fila,
+              estado.mapeo.rubro
+            )
           ),
 
         localidad:
-          valorFila(
-            fila,
-            estado.mapeo.localidad
+          normalizarLocalidad(
+            valorFila(
+              fila,
+              estado.mapeo.localidad
+            )
           ),
 
         direccion:
@@ -2905,6 +3245,12 @@ function agrupar(
       decisionBase:
         'crear',
 
+      unionAutomatica:
+        false,
+
+      decisionManual:
+        null,
+
     };
 
 
@@ -3073,6 +3419,71 @@ async function cargarExistentes() {
    COINCIDENCIAS CON BASE
 ========================================================= */
 
+function esCoincidenciaBaseSegura(
+  comparacion
+) {
+
+  if (!comparacion) {
+    return false;
+  }
+
+
+  /*
+    Regla conservadora:
+    solamente unimos automáticamente cuando
+    hay más de una señal fuerte de identidad.
+
+    Los casos dudosos siguen quedando para
+    revisión manual.
+  */
+
+  if (
+    comparacion.mismoTelefono &&
+    comparacion.nombre >= 0.80
+  ) {
+
+    return true;
+
+  }
+
+
+  if (
+    comparacion.mismaDireccion &&
+    comparacion.mismaLocalidad &&
+    comparacion.nombre >= 0.78
+  ) {
+
+    return true;
+
+  }
+
+
+  if (
+    comparacion.mismaDireccion &&
+    comparacion.nombre >= 0.90
+  ) {
+
+    return true;
+
+  }
+
+
+  if (
+    comparacion.nombre >= 0.97 &&
+    comparacion.direccion >= 0.90 &&
+    comparacion.localidad >= 0.80
+  ) {
+
+    return true;
+
+  }
+
+
+  return false;
+
+}
+
+
 function asignarBaseGrupo(
   grupo,
   existentes
@@ -3130,22 +3541,107 @@ function asignarBaseGrupo(
       mejor;
 
 
-    grupo.decisionBase =
+    /*
+      Si el usuario ya eligió manualmente
+      mantenerlo separado, respetamos esa decisión
+      aunque vuelva a editar el comercio.
+    */
+
+    if (
+      grupo.decisionManual ===
+      'crear'
+    ) {
+
+      grupo.decisionBase =
+        'crear';
+
+
+      grupo.unionAutomatica =
+        false;
+
+
+      return;
+
+    }
+
+
+    /*
+      Si el usuario ya decidió manualmente unirlo,
+      conservamos esa decisión y no la convertimos
+      en unión automática.
+    */
+
+    if (
+      grupo.decisionManual ===
+      'unir'
+    ) {
+
+      grupo.decisionBase =
+        'unir';
+
+
+      grupo.unionAutomatica =
+        false;
+
+
+      return;
+
+    }
+
+
+    if (
+      esCoincidenciaBaseSegura(
+        mejor.comparacion
+      )
+    ) {
+
+      grupo.decisionBase =
+        'unir';
+
+
+      grupo.unionAutomatica =
+        true;
+
+    } else {
+
+      grupo.decisionBase =
+        null;
+
+
+      grupo.unionAutomatica =
+        false;
+
+    }
+
+
+    return;
+
+  }
+
+
+  grupo.base =
+    null;
+
+
+  grupo.decisionBase =
+    'crear';
+
+
+  grupo.unionAutomatica =
+    false;
+
+
+  if (
+    grupo.decisionManual ===
+    'unir'
+  ) {
+
+    grupo.decisionManual =
       null;
-
-  } else {
-
-    grupo.base =
-      null;
-
-
-    grupo.decisionBase =
-      'crear';
 
   }
 
 }
-
 
 function recalcularBases(
   analisis
@@ -3379,6 +3875,27 @@ function cantidadAdhesiones() {
         grupo.adhesiones.length,
       0
     );
+
+}
+
+
+function cantidadUnionesAutomaticas() {
+
+  return (
+    estado
+      .analisis
+      ?.grupos ||
+    []
+  )
+    .filter(
+      grupo =>
+        !grupo.omitir &&
+        grupo.base &&
+        grupo.decisionBase ===
+        'unir' &&
+        grupo.unionAutomatica
+    )
+    .length;
 
 }
 
@@ -3914,6 +4431,163 @@ function renderCoincidenciaBase(
 
 
 /* =========================================================
+   UNIÓN AUTOMÁTICA CON BASE
+========================================================= */
+
+function renderUnionAutomatica(
+  grupo
+) {
+
+  const existente =
+    grupo.base
+      ?.existente;
+
+
+  const comparacion =
+    grupo.base
+      ?.comparacion;
+
+
+  if (
+    !existente ||
+    !comparacion
+  ) {
+
+    return '';
+
+  }
+
+
+  return `
+
+    <article class="imp-detection-card">
+
+      <div class="imp-detection-status">
+
+        ✓ UNIÓN AUTOMÁTICA SEGURA ·
+
+        ${
+          Math.round(
+            comparacion.puntaje *
+            100
+          )
+        }%
+
+      </div>
+
+
+      <div class="imp-compare">
+
+        <div>
+
+          <small>
+            IMPORTADO
+          </small>
+
+          <strong>
+            ${
+              esc(
+                grupo
+                  .principal
+                  .nombre
+              )
+            }
+          </strong>
+
+          <span>
+            ${
+              esc(
+                grupo
+                  .principal
+                  .direccion ||
+                ''
+              )
+            }
+          </span>
+
+        </div>
+
+
+        <div class="imp-vs">
+          =
+        </div>
+
+
+        <div>
+
+          <small>
+            BASE ACTUAL
+          </small>
+
+          <strong>
+            ${esc(existente.nombre)}
+          </strong>
+
+          <span>
+            ${
+              esc(
+                existente.direccion ||
+                ''
+              )
+            }
+          </span>
+
+        </div>
+
+      </div>
+
+
+      <div class="imp-match-reasons">
+
+        ${
+          comparacion.mismoTelefono
+            ? '<span>✓ mismo teléfono</span>'
+            : ''
+        }
+
+        ${
+          comparacion.mismaDireccion
+            ? '<span>✓ misma dirección</span>'
+            : ''
+        }
+
+        ${
+          comparacion.mismaLocalidad
+            ? '<span>✓ misma localidad</span>'
+            : ''
+        }
+
+      </div>
+
+
+      <div class="imp-inline-actions">
+
+        <button
+          class="imp-secondary"
+          data-act="crear-nuevo"
+          data-id="${grupo.id}"
+        >
+          Crear separado
+        </button>
+
+        <button
+          class="imp-secondary"
+          data-act="editar"
+          data-id="${grupo.id}"
+        >
+          Editar antes
+        </button>
+
+      </div>
+
+    </article>
+
+  `;
+
+}
+
+
+/* =========================================================
    FILA COMERCIO
 ========================================================= */
 
@@ -3939,7 +4613,9 @@ function renderFilaGrupo(
   ) {
 
     estadoTexto =
-      `Unir con #${grupo.base.existente.id}`;
+      grupo.unionAutomatica
+        ? `Unión automática con #${grupo.base.existente.id}`
+        : `Unir con #${grupo.base.existente.id}`;
 
   } else if (
     grupo.base &&
@@ -4240,6 +4916,14 @@ function conectarResultado() {
                   'unir';
 
 
+                grupo.unionAutomatica =
+                  false;
+
+
+                grupo.decisionManual =
+                  'unir';
+
+
                 renderResultado();
 
               }
@@ -4261,6 +4945,14 @@ function conectarResultado() {
               if (grupo) {
 
                 grupo.decisionBase =
+                  'crear';
+
+
+                grupo.unionAutomatica =
+                  false;
+
+
+                grupo.decisionManual =
                   'crear';
 
 
@@ -4349,6 +5041,10 @@ function renderResultado() {
 
   const pendientesConflictos =
     conflictosPendientes();
+
+
+  const unionesAutomaticas =
+    cantidadUnionesAutomaticas();
 
 
   const sinCoordenadas =
@@ -4446,6 +5142,13 @@ function renderResultado() {
 
         ${
           resumenCard(
+            'Uniones automáticas',
+            unionesAutomaticas
+          )
+        }
+
+        ${
+          resumenCard(
             'Pendientes',
             pendientes,
             pendientes
@@ -4475,6 +5178,77 @@ function renderResultado() {
 
 
       ${
+        unionesAutomaticas
+          ? `
+
+            <div class="imp-note">
+
+              <strong>
+                ✓ ${unionesAutomaticas}
+                coincidencia(s) segura(s) se unirán automáticamente.
+              </strong>
+
+              No tenés que tocarlas una por una.
+              El comercio existente conserva sus datos principales
+              y solamente se agregan o actualizan los beneficios
+              correspondientes a los nuevos programas.
+
+            </div>
+
+          `
+          : ''
+      }
+
+
+      ${
+        unionesAutomaticas
+          ? `
+
+            <div class="imp-result-section">
+
+              <div class="imp-section-title">
+
+                <h3>
+                  Uniones automáticas
+                </h3>
+
+                <p>
+                  Estas coincidencias son seguras.
+                  Si alguna no corresponde, podés
+                  crearla por separado antes de importar.
+                </p>
+
+              </div>
+
+
+              <div class="imp-detection-list">
+
+                ${
+                  analisis.grupos
+                    .filter(
+                      grupo =>
+                        !grupo.omitir &&
+                        grupo.base &&
+                        grupo.decisionBase ===
+                          'unir' &&
+                        grupo.unionAutomatica
+                    )
+                    .map(
+                      renderUnionAutomatica
+                    )
+                    .join('')
+                }
+
+              </div>
+
+            </div>
+
+          `
+          : ''
+      }
+
+
+      ${
         sinCoordenadas
           ? `
 
@@ -4488,13 +5262,12 @@ function renderResultado() {
 
               </strong>
 
-              Se pueden importar igual,
-              pero los comercios nuevos
-              quedarán
-              <b>inactivos</b>
-              para no romper el mapa público.
+              Se pueden importar igual y
+              <b>aparecerán en la lista pública</b>.
 
-              Después los ubicamos y activamos.
+              Hasta que tengan latitud y longitud,
+              no aparecerán como punto en el mapa
+              ni se usarán para calcular cercanía.
 
             </div>
 
@@ -5254,6 +6027,18 @@ function abrirEditor(
         }
 
 
+        grupo.principal.rubro =
+          normalizarRubro(
+            grupo.principal.rubro
+          );
+
+
+        grupo.principal.localidad =
+          normalizarLocalidad(
+            grupo.principal.localidad
+          );
+
+
         const adhesiones = [];
 
 
@@ -5676,14 +6461,14 @@ function payloadNuevo(
       ),
 
     rubro:
-      limpiar(
+      normalizarRubro(
         grupo
           .principal
           .rubro
       ),
 
     localidad:
-      limpiar(
+      normalizarLocalidad(
         grupo
           .principal
           .localidad
@@ -5731,13 +6516,15 @@ function payloadNuevo(
         : null,
 
     /*
-      Si no tiene ubicación,
-      queda inactivo para no romper
-      el mapa público.
+      El comercio queda visible en la app
+      aunque todavía no tenga coordenadas.
+
+      app.js evita enviarlo al mapa hasta
+      que tenga latitud y longitud válidas.
     */
 
     activo:
-      coordenadas,
+      true,
 
     updated_at:
       new Date()
@@ -5820,7 +6607,7 @@ async function confirmarImportacion() {
 
   const mensaje = `Se van a procesar ${grupos.length} comercios y ${cantidadAdhesiones()} beneficios.${
     sinCoordenadas
-      ? `\n\n${sinCoordenadas} comercio(s) nuevos sin coordenadas quedarán inactivos hasta ubicarlos.`
+      ? `\n\n${sinCoordenadas} comercio(s) nuevos no tienen coordenadas. Se verán en la lista, pero quedarán pendientes de ubicar en el mapa.`
       : ''
   }\n\n¿Confirmás la importación?`;
 
@@ -5896,12 +6683,31 @@ async function confirmarImportacion() {
 
       const patch = {
 
+        /*
+          Si ya existía pero estaba oculto por no tener
+          coordenadas, ahora también queda visible en la lista.
+          El mapa se encarga de ignorarlo hasta que sea ubicado.
+        */
+
+        activo:
+          true,
+
         updated_at:
           new Date()
             .toISOString(),
 
       };
 
+
+      /*
+        En una unión AUTOMÁTICA conservamos los datos
+        principales que ya existen en Supabase y solo
+        completamos campos vacíos.
+
+        En una unión MANUAL usamos los datos revisados
+        en la importación, porque el usuario decidió que
+        efectivamente se trata del mismo comercio.
+      */
 
       for (
         const key
@@ -5915,16 +6721,70 @@ async function confirmarImportacion() {
         ]
       ) {
 
-        if (
+        let valorImportado =
           limpiar(
             principal[key]
-          )
+          );
+
+
+        if (
+          key ===
+          'rubro'
         ) {
 
-          patch[key] =
-            limpiar(
-              principal[key]
+          valorImportado =
+            normalizarRubro(
+              valorImportado
             );
+
+        }
+
+
+        if (
+          key ===
+          'localidad'
+        ) {
+
+          valorImportado =
+            normalizarLocalidad(
+              valorImportado
+            );
+
+        }
+
+
+        const valorExistente =
+          limpiar(
+            existente[key]
+          );
+
+
+        if (
+          !valorImportado
+        ) {
+
+          continue;
+
+        }
+
+
+        if (
+          grupo.unionAutomatica
+        ) {
+
+          if (
+            !valorExistente
+          ) {
+
+            patch[key] =
+              valorImportado;
+
+          }
+
+        } else {
+
+          patch[key] =
+            valorImportado;
 
         }
 
@@ -5937,16 +6797,29 @@ async function confirmarImportacion() {
         )
       ) {
 
-        patch.lat =
-          numero(
-            principal.lat
+        const existenteTieneCoordenadas =
+          tieneCoordenadas(
+            existente
           );
 
 
-        patch.lng =
-          numero(
-            principal.lng
-          );
+        if (
+          !grupo.unionAutomatica ||
+          !existenteTieneCoordenadas
+        ) {
+
+          patch.lat =
+            numero(
+              principal.lat
+            );
+
+
+          patch.lng =
+            numero(
+              principal.lng
+            );
+
+        }
 
       }
 
@@ -6400,7 +7273,7 @@ function renderExito(
 
         ${
           resumenCard(
-            'Nuevos inactivos',
+            'Pendientes de mapa',
             resultado.sinCoordenadas
           )
         }
@@ -6420,12 +7293,11 @@ function renderExito(
 
               Los nuevos sin
               latitud/longitud quedaron
-              inactivos.
+              visibles en la lista pública.
 
-              No aparecerán en la app
-              pública hasta que les
-              carguemos coordenadas
-              y los activemos.
+              Todavía no aparecerán como
+              punto en el mapa ni en el orden
+              por cercanía hasta ubicarlos.
 
             </div>
 

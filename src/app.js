@@ -1,12 +1,22 @@
 import './style.css';
 
-import { programas, comercios } from './data.js';
+import {
+  programas,
+  comercios,
+} from './data.js';
 
-import { registrarEvento } from './analytics.js';
+import {
+  registrarEvento,
+} from './analytics.js';
 
-const app = document.querySelector('#app');
 
-let programaSeleccionado = localStorage.getItem('mta_programa') || null;
+const app =
+  document.querySelector('#app');
+
+
+let programaSeleccionado =
+  localStorage.getItem('mta_programa') ||
+  null;
 
 let busqueda = '';
 
@@ -24,25 +34,39 @@ let marcadorUsuario = null;
 
 let temporizadorBusqueda = null;
 
+
 /* =====================================================
    VALIDAR PROGRAMA GUARDADO
 ===================================================== */
 
 if (
   programaSeleccionado &&
-  !programas.some((programa) => programa.id === programaSeleccionado)
+  !programas.some(
+    programa =>
+      programa.id ===
+      programaSeleccionado
+  )
 ) {
+
   programaSeleccionado = null;
 
-  localStorage.removeItem('mta_programa');
+  localStorage.removeItem(
+    'mta_programa'
+  );
+
 }
+
 
 /* =====================================================
    LOGO
 ===================================================== */
 
-function logoMoron(clase = '') {
+function logoMoron(
+  clase = ''
+) {
+
   return `
+
     <span class="moron-symbol ${clase}">
 
       <span
@@ -58,56 +82,207 @@ function logoMoron(clase = '') {
       ></span>
 
     </span>
+
   `;
+
 }
+
 
 /* =====================================================
    UTILIDADES
 ===================================================== */
 
-function programaPorId(id) {
-  return programas.find((programa) => programa.id === id);
+function programaPorId(
+  id
+) {
+
+  return programas.find(
+    programa =>
+      programa.id === id
+  );
+
 }
 
-function normalizar(texto = '') {
-  return texto
+
+function normalizar(
+  texto = ''
+) {
+
+  return String(texto)
     .toLowerCase()
     .normalize('NFD')
-    .replace(/[\u0300-\u036f]/g, '');
+    .replace(
+      /[\u0300-\u036f]/g,
+      ''
+    );
+
 }
 
-function distanciaKm(lat1, lon1, lat2, lon2) {
-  const R = 6371;
 
-  const dLat = ((lat2 - lat1) * Math.PI) / 180;
+function numeroValido(
+  valor
+) {
 
-  const dLon = ((lon2 - lon1) * Math.PI) / 180;
+  if (
+    valor === null ||
+    valor === undefined ||
+    valor === ''
+  ) {
 
-  const a =
-    Math.sin(dLat / 2) ** 2 +
-    Math.cos((lat1 * Math.PI) / 180) *
-      Math.cos((lat2 * Math.PI) / 180) *
-      Math.sin(dLon / 2) ** 2;
+    return null;
 
-  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-}
-
-function beneficiosVisibles(comercio) {
-  if (!programaSeleccionado) {
-    return comercio.beneficios;
   }
 
-  return comercio.beneficios.filter(
-    (beneficio) => beneficio.programa === programaSeleccionado
-  );
+
+  const numero =
+    Number(valor);
+
+
+  return Number.isFinite(numero)
+    ? numero
+    : null;
+
 }
+
+
+function tieneCoordenadas(
+  comercio
+) {
+
+  const lat =
+    numeroValido(
+      comercio?.lat
+    );
+
+  const lng =
+    numeroValido(
+      comercio?.lng
+    );
+
+
+  return (
+    lat !== null &&
+    lng !== null &&
+    lat >= -90 &&
+    lat <= 90 &&
+    lng >= -180 &&
+    lng <= 180
+  );
+
+}
+
+
+function distanciaKm(
+  lat1,
+  lon1,
+  lat2,
+  lon2
+) {
+
+  const R =
+    6371;
+
+
+  const dLat =
+    (
+      (
+        lat2 -
+        lat1
+      ) *
+      Math.PI
+    ) /
+    180;
+
+
+  const dLon =
+    (
+      (
+        lon2 -
+        lon1
+      ) *
+      Math.PI
+    ) /
+    180;
+
+
+  const a =
+    Math.sin(
+      dLat / 2
+    ) ** 2 +
+
+    Math.cos(
+      (
+        lat1 *
+        Math.PI
+      ) /
+      180
+    ) *
+
+    Math.cos(
+      (
+        lat2 *
+        Math.PI
+      ) /
+      180
+    ) *
+
+    Math.sin(
+      dLon / 2
+    ) ** 2;
+
+
+  return (
+    R *
+    2 *
+    Math.atan2(
+      Math.sqrt(a),
+      Math.sqrt(
+        1 - a
+      )
+    )
+  );
+
+}
+
+
+function beneficiosVisibles(
+  comercio
+) {
+
+  const beneficios =
+    Array.isArray(
+      comercio?.beneficios
+    )
+      ? comercio.beneficios
+      : [];
+
+
+  if (
+    !programaSeleccionado
+  ) {
+
+    return beneficios;
+
+  }
+
+
+  return beneficios.filter(
+    beneficio =>
+      beneficio.programa ===
+      programaSeleccionado
+  );
+
+}
+
 
 /* =====================================================
    HOME
 ===================================================== */
 
 function renderHome() {
+
   destruirMapa();
+
 
   app.innerHTML = `
 
@@ -117,7 +292,9 @@ function renderHome() {
 
         <header class="brand">
 
-          ${logoMoron('moron-symbol-home')}
+          ${logoMoron(
+            'moron-symbol-home'
+          )}
 
           <div class="brand-text">
 
@@ -292,37 +469,85 @@ function renderHome() {
 
   `;
 
-  document
-    .querySelector('#btn-beneficios')
-    .addEventListener('click', renderProgramas);
-
-  document.querySelector('#btn-mapa').addEventListener('click', () => {
-    programaSeleccionado = null;
-
-    localStorage.removeItem('mta_programa');
-
-    renderExplorar();
-  });
-
-  document.querySelector('#btn-buscar').addEventListener('click', () => {
-    programaSeleccionado = null;
-
-    localStorage.removeItem('mta_programa');
-
-    renderExplorar(true);
-  });
 
   document
-    .querySelector('#btn-cerca')
-    .addEventListener('click', solicitarUbicacion);
+    .querySelector(
+      '#btn-beneficios'
+    )
+    .addEventListener(
+      'click',
+      renderProgramas
+    );
+
+
+  document
+    .querySelector(
+      '#btn-mapa'
+    )
+    .addEventListener(
+      'click',
+      () => {
+
+        programaSeleccionado =
+          null;
+
+
+        localStorage.removeItem(
+          'mta_programa'
+        );
+
+
+        renderExplorar();
+
+      }
+    );
+
+
+  document
+    .querySelector(
+      '#btn-buscar'
+    )
+    .addEventListener(
+      'click',
+      () => {
+
+        programaSeleccionado =
+          null;
+
+
+        localStorage.removeItem(
+          'mta_programa'
+        );
+
+
+        renderExplorar(
+          true
+        );
+
+      }
+    );
+
+
+  document
+    .querySelector(
+      '#btn-cerca'
+    )
+    .addEventListener(
+      'click',
+      solicitarUbicacion
+    );
+
 }
+
 
 /* =====================================================
    PROGRAMAS
 ===================================================== */
 
 function renderProgramas() {
+
   destruirMapa();
+
 
   app.innerHTML = `
 
@@ -343,7 +568,9 @@ function renderProgramas() {
 
           <div class="internal-brand">
 
-            ${logoMoron('moron-symbol-small')}
+            ${logoMoron(
+              'moron-symbol-small'
+            )}
 
             <span class="mini-brand">
               MORÓN TE ACOMPAÑA
@@ -371,9 +598,10 @@ function renderProgramas() {
 
       <section class="program-grid">
 
-        ${programas
-          .map(
-            (programa) => `
+        ${
+          programas
+            .map(
+              programa => `
 
                 <button
                   class="program-image-card"
@@ -422,8 +650,9 @@ function renderProgramas() {
                 </button>
 
               `
-          )
-          .join('')}
+            )
+            .join('')
+        }
 
       </section>
 
@@ -442,128 +671,366 @@ function renderProgramas() {
 
   `;
 
-  document.querySelector('#volver').addEventListener('click', renderHome);
 
-  document.querySelector('#ver-todos').addEventListener('click', () => {
-    programaSeleccionado = null;
+  document
+    .querySelector(
+      '#volver'
+    )
+    .addEventListener(
+      'click',
+      renderHome
+    );
 
-    localStorage.removeItem('mta_programa');
 
-    registrarEvento('ver_todos_programas');
+  document
+    .querySelector(
+      '#ver-todos'
+    )
+    .addEventListener(
+      'click',
+      () => {
 
-    renderExplorar();
-  });
+        programaSeleccionado =
+          null;
 
-  document.querySelectorAll('[data-programa]').forEach((card) => {
-    card.addEventListener('click', () => {
-      programaSeleccionado = card.dataset.programa;
 
-      localStorage.setItem('mta_programa', programaSeleccionado);
+        localStorage.removeItem(
+          'mta_programa'
+        );
 
-      registrarEvento('programa_seleccionado', {
-        programa: programaSeleccionado,
-      });
 
-      renderExplorar();
-    });
-  });
+        registrarEvento(
+          'ver_todos_programas'
+        );
+
+
+        renderExplorar();
+
+      }
+    );
+
+
+  document
+    .querySelectorAll(
+      '[data-programa]'
+    )
+    .forEach(
+      card => {
+
+        card.addEventListener(
+          'click',
+          () => {
+
+            programaSeleccionado =
+              card.dataset.programa;
+
+
+            localStorage.setItem(
+              'mta_programa',
+              programaSeleccionado
+            );
+
+
+            registrarEvento(
+              'programa_seleccionado',
+              {
+                programa:
+                  programaSeleccionado,
+              }
+            );
+
+
+            rubroSeleccionado =
+              '';
+
+            localidadSeleccionada =
+              '';
+
+            busqueda =
+              '';
+
+
+            renderExplorar();
+
+          }
+        );
+
+      }
+    );
+
 }
+
 
 /* =====================================================
    FILTROS
 ===================================================== */
 
 function obtenerComerciosFiltrados() {
-  let resultado = [...comercios];
 
-  if (programaSeleccionado) {
-    resultado = resultado.filter((comercio) =>
-      comercio.beneficios.some(
-        (beneficio) => beneficio.programa === programaSeleccionado
-      )
-    );
-  }
+  let resultado =
+    [...comercios];
 
-  if (rubroSeleccionado) {
-    resultado = resultado.filter(
-      (comercio) => comercio.rubro === rubroSeleccionado
-    );
-  }
 
-  if (localidadSeleccionada) {
-    resultado = resultado.filter(
-      (comercio) => comercio.localidad === localidadSeleccionada
-    );
-  }
+  if (
+    programaSeleccionado
+  ) {
 
-  if (busqueda.trim()) {
-    const texto = normalizar(busqueda);
-
-    resultado = resultado.filter((comercio) => {
-      const beneficiosTexto = comercio.beneficios
-        .map((beneficio) => {
-          const programa = programaPorId(beneficio.programa);
-
-          return `
-                    ${programa?.nombre || ''}
-
-                    ${beneficio.beneficio}
-
-                    ${beneficio.condiciones}
-                  `;
-        })
-        .join(' ');
-
-      const contenido = normalizar(
-        `
-                ${comercio.nombre}
-
-                ${comercio.rubro}
-
-                ${comercio.localidad}
-
-                ${comercio.direccion}
-
-                ${beneficiosTexto}
-              `
+    resultado =
+      resultado.filter(
+        comercio =>
+          Array.isArray(
+            comercio.beneficios
+          ) &&
+          comercio.beneficios.some(
+            beneficio =>
+              beneficio.programa ===
+              programaSeleccionado
+          )
       );
 
-      return contenido.includes(texto);
-    });
   }
 
-  if (ubicacionUsuario) {
-    resultado = resultado.map((comercio) => ({
-      ...comercio,
 
-      distancia: distanciaKm(
-        ubicacionUsuario.lat,
-        ubicacionUsuario.lng,
-        comercio.lat,
-        comercio.lng
-      ),
-    }));
+  if (
+    rubroSeleccionado
+  ) {
 
-    resultado.sort((a, b) => a.distancia - b.distancia);
+    resultado =
+      resultado.filter(
+        comercio =>
+          comercio.rubro ===
+          rubroSeleccionado
+      );
+
   }
+
+
+  if (
+    localidadSeleccionada
+  ) {
+
+    resultado =
+      resultado.filter(
+        comercio =>
+          comercio.localidad ===
+          localidadSeleccionada
+      );
+
+  }
+
+
+  if (
+    busqueda.trim()
+  ) {
+
+    const texto =
+      normalizar(
+        busqueda
+      );
+
+
+    resultado =
+      resultado.filter(
+        comercio => {
+
+          const beneficiosTexto =
+            (
+              comercio.beneficios ||
+              []
+            )
+              .map(
+                beneficio => {
+
+                  const programa =
+                    programaPorId(
+                      beneficio.programa
+                    );
+
+
+                  return `
+
+                    ${
+                      programa?.nombre ||
+                      ''
+                    }
+
+                    ${
+                      beneficio.beneficio ||
+                      ''
+                    }
+
+                    ${
+                      beneficio.condiciones ||
+                      ''
+                    }
+
+                  `;
+
+                }
+              )
+              .join(' ');
+
+
+          const contenido =
+            normalizar(
+              `
+
+                ${comercio.nombre || ''}
+
+                ${comercio.rubro || ''}
+
+                ${comercio.localidad || ''}
+
+                ${comercio.direccion || ''}
+
+                ${beneficiosTexto}
+
+              `
+            );
+
+
+          return contenido.includes(
+            texto
+          );
+
+        }
+      );
+
+  }
+
+
+  if (
+    ubicacionUsuario
+  ) {
+
+    resultado =
+      resultado.map(
+        comercio => {
+
+          if (
+            !tieneCoordenadas(
+              comercio
+            )
+          ) {
+
+            return {
+              ...comercio,
+
+              distancia:
+                null,
+            };
+
+          }
+
+
+          return {
+
+            ...comercio,
+
+            distancia:
+              distanciaKm(
+
+                ubicacionUsuario.lat,
+
+                ubicacionUsuario.lng,
+
+                Number(
+                  comercio.lat
+                ),
+
+                Number(
+                  comercio.lng
+                )
+
+              ),
+
+          };
+
+        }
+      );
+
+
+    resultado.sort(
+      (
+        a,
+        b
+      ) => {
+
+        const distanciaA =
+          Number.isFinite(
+            a.distancia
+          )
+            ? a.distancia
+            : Infinity;
+
+
+        const distanciaB =
+          Number.isFinite(
+            b.distancia
+          )
+            ? b.distancia
+            : Infinity;
+
+
+        return (
+          distanciaA -
+          distanciaB
+        );
+
+      }
+    );
+
+  }
+
 
   return resultado;
+
 }
+
 
 /* =====================================================
    EXPLORAR
 ===================================================== */
 
-function renderExplorar(enfocarBusqueda = false) {
-  const programa = programaPorId(programaSeleccionado);
+function renderExplorar(
+  enfocarBusqueda = false
+) {
 
-  const rubros = [
-    ...new Set(comercios.map((comercio) => comercio.rubro)),
-  ].sort();
+  const programa =
+    programaPorId(
+      programaSeleccionado
+    );
 
-  const localidades = [
-    ...new Set(comercios.map((comercio) => comercio.localidad)),
-  ].sort();
+
+  const rubros =
+    [
+      ...new Set(
+
+        comercios
+          .map(
+            comercio =>
+              comercio.rubro
+          )
+          .filter(Boolean)
+
+      ),
+    ].sort();
+
+
+  const localidades =
+    [
+      ...new Set(
+
+        comercios
+          .map(
+            comercio =>
+              comercio.localidad
+          )
+          .filter(Boolean)
+
+      ),
+    ].sort();
+
 
   app.innerHTML = `
 
@@ -586,7 +1053,9 @@ function renderExplorar(enfocarBusqueda = false) {
 
             <div class="internal-brand">
 
-              ${logoMoron('moron-symbol-small')}
+              ${logoMoron(
+                'moron-symbol-small'
+              )}
 
               <span class="mini-brand">
                 MORÓN TE ACOMPAÑA
@@ -596,7 +1065,11 @@ function renderExplorar(enfocarBusqueda = false) {
 
             <h2>
 
-              ${programa ? programa.nombre : 'Todos los beneficios'}
+              ${
+                programa
+                  ? programa.nombre
+                  : 'Todos los beneficios'
+              }
 
             </h2>
 
@@ -639,20 +1112,27 @@ function renderExplorar(enfocarBusqueda = false) {
               Todos los rubros
             </option>
 
-            ${rubros
-              .map(
-                (rubro) => `
+            ${
+              rubros
+                .map(
+                  rubro => `
 
                     <option
                       value="${rubro}"
-                      ${rubroSeleccionado === rubro ? 'selected' : ''}
+                      ${
+                        rubroSeleccionado ===
+                        rubro
+                          ? 'selected'
+                          : ''
+                      }
                     >
                       ${rubro}
                     </option>
 
                   `
-              )
-              .join('')}
+                )
+                .join('')
+            }
 
           </select>
 
@@ -665,20 +1145,27 @@ function renderExplorar(enfocarBusqueda = false) {
               Todas las localidades
             </option>
 
-            ${localidades
-              .map(
-                (localidad) => `
+            ${
+              localidades
+                .map(
+                  localidad => `
 
                     <option
                       value="${localidad}"
-                      ${localidadSeleccionada === localidad ? 'selected' : ''}
+                      ${
+                        localidadSeleccionada ===
+                        localidad
+                          ? 'selected'
+                          : ''
+                      }
                     >
                       ${localidad}
                     </option>
 
                   `
-              )
-              .join('')}
+                )
+                .join('')
+            }
 
           </select>
 
@@ -744,97 +1231,229 @@ function renderExplorar(enfocarBusqueda = false) {
 
   `;
 
-  document.querySelector('#volver-home').addEventListener('click', renderHome);
 
   document
-    .querySelector('#cambiar-programa')
-    .addEventListener('click', renderProgramas);
+    .querySelector(
+      '#volver-home'
+    )
+    .addEventListener(
+      'click',
+      renderHome
+    );
 
-  const buscador = document.querySelector('#buscador');
 
-  buscador.addEventListener('input', (event) => {
-    busqueda = event.target.value;
+  document
+    .querySelector(
+      '#cambiar-programa'
+    )
+    .addEventListener(
+      'click',
+      renderProgramas
+    );
 
-    actualizarResultados();
 
-    clearTimeout(temporizadorBusqueda);
+  const buscador =
+    document.querySelector(
+      '#buscador'
+    );
 
-    temporizadorBusqueda = setTimeout(() => {
-      if (busqueda.trim().length >= 2) {
-        registrarEvento('busqueda', {
-          programa: programaSeleccionado,
 
-          busqueda: busqueda.trim(),
+  buscador.addEventListener(
+    'input',
+    event => {
 
-          rubro: rubroSeleccionado,
+      busqueda =
+        event.target.value;
 
-          localidad: localidadSeleccionada,
-        });
+
+      actualizarResultados();
+
+
+      clearTimeout(
+        temporizadorBusqueda
+      );
+
+
+      temporizadorBusqueda =
+        setTimeout(
+          () => {
+
+            if (
+              busqueda
+                .trim()
+                .length >= 2
+            ) {
+
+              registrarEvento(
+                'busqueda',
+                {
+
+                  programa:
+                    programaSeleccionado,
+
+                  busqueda:
+                    busqueda.trim(),
+
+                  rubro:
+                    rubroSeleccionado,
+
+                  localidad:
+                    localidadSeleccionada,
+
+                }
+              );
+
+            }
+
+          },
+          700
+        );
+
+    }
+  );
+
+
+  document
+    .querySelector(
+      '#filtro-rubro'
+    )
+    .addEventListener(
+      'change',
+      event => {
+
+        rubroSeleccionado =
+          event.target.value;
+
+
+        registrarEvento(
+          'filtro_rubro',
+          {
+
+            programa:
+              programaSeleccionado,
+
+            rubro:
+              rubroSeleccionado ||
+              'todos',
+
+          }
+        );
+
+
+        actualizarResultados();
+
       }
-    }, 700);
-  });
+    );
+
 
   document
-    .querySelector('#filtro-rubro')
-    .addEventListener('change', (event) => {
-      rubroSeleccionado = event.target.value;
+    .querySelector(
+      '#filtro-localidad'
+    )
+    .addEventListener(
+      'change',
+      event => {
 
-      registrarEvento('filtro_rubro', {
-        programa: programaSeleccionado,
+        localidadSeleccionada =
+          event.target.value;
 
-        rubro: rubroSeleccionado || 'todos',
-      });
 
-      actualizarResultados();
-    });
+        registrarEvento(
+          'filtro_localidad',
+          {
+
+            programa:
+              programaSeleccionado,
+
+            localidad:
+              localidadSeleccionada ||
+              'todas',
+
+          }
+        );
+
+
+        actualizarResultados();
+
+      }
+    );
+
 
   document
-    .querySelector('#filtro-localidad')
-    .addEventListener('change', (event) => {
-      localidadSeleccionada = event.target.value;
+    .querySelector(
+      '#cerca-explorar'
+    )
+    .addEventListener(
+      'click',
+      solicitarUbicacion
+    );
 
-      registrarEvento('filtro_localidad', {
-        programa: programaSeleccionado,
-
-        localidad: localidadSeleccionada || 'todas',
-      });
-
-      actualizarResultados();
-    });
-
-  document
-    .querySelector('#cerca-explorar')
-    .addEventListener('click', solicitarUbicacion);
 
   crearMapa();
 
+
   actualizarResultados();
 
-  if (enfocarBusqueda) {
-    setTimeout(() => buscador.focus(), 100);
+
+  if (
+    enfocarBusqueda
+  ) {
+
+    setTimeout(
+      () =>
+        buscador.focus(),
+      100
+    );
+
   }
+
 }
+
 
 /* =====================================================
    RESULTADOS
 ===================================================== */
 
 function actualizarResultados() {
-  const resultado = obtenerComerciosFiltrados();
 
-  const lista = document.querySelector('#lista-comercios');
+  const resultado =
+    obtenerComerciosFiltrados();
 
-  const contador = document.querySelector('#contador');
 
-  if (!lista || !contador) {
+  const lista =
+    document.querySelector(
+      '#lista-comercios'
+    );
+
+
+  const contador =
+    document.querySelector(
+      '#contador'
+    );
+
+
+  if (
+    !lista ||
+    !contador
+  ) {
+
     return;
+
   }
 
-  contador.textContent = `${resultado.length} ${
-    resultado.length === 1 ? 'comercio' : 'comercios'
-  }`;
 
-  if (!resultado.length) {
+  contador.textContent =
+    `${resultado.length} ${
+      resultado.length === 1
+        ? 'comercio'
+        : 'comercios'
+    }`;
+
+
+  if (
+    !resultado.length
+  ) {
+
     lista.innerHTML = `
 
       <div class="empty-state">
@@ -855,27 +1474,77 @@ function actualizarResultados() {
       </div>
 
     `;
+
   } else {
-    lista.innerHTML = resultado
-      .map((comercio) => tarjetaComercio(comercio))
-      .join('');
+
+    lista.innerHTML =
+      resultado
+        .map(
+          comercio =>
+            tarjetaComercio(
+              comercio
+            )
+        )
+        .join('');
+
   }
 
-  document.querySelectorAll('[data-comercio]').forEach((button) => {
-    button.addEventListener('click', () => {
-      abrirDetalle(Number(button.dataset.comercio));
-    });
-  });
 
-  actualizarMapa(resultado);
+  document
+    .querySelectorAll(
+      '[data-comercio]'
+    )
+    .forEach(
+      button => {
+
+        button.addEventListener(
+          'click',
+          () => {
+
+            abrirDetalle(
+              Number(
+                button
+                  .dataset
+                  .comercio
+              )
+            );
+
+          }
+        );
+
+      }
+    );
+
+
+  actualizarMapa(
+    resultado
+  );
+
 }
+
 
 /* =====================================================
    TARJETAS DE COMERCIOS
 ===================================================== */
 
-function tarjetaComercio(comercio) {
-  const beneficios = beneficiosVisibles(comercio);
+function tarjetaComercio(
+  comercio
+) {
+
+  const beneficios =
+    beneficiosVisibles(
+      comercio
+    );
+
+
+  const ubicacionTexto =
+    [
+      comercio.direccion,
+      comercio.localidad,
+    ]
+      .filter(Boolean)
+      .join(' · ');
+
 
   return `
 
@@ -884,11 +1553,13 @@ function tarjetaComercio(comercio) {
       <div class="business-card-top">
 
         <span class="category-badge">
-          ${comercio.rubro}
+          ${comercio.rubro || 'Comercio'}
         </span>
 
         ${
-          comercio.distancia !== undefined
+          Number.isFinite(
+            comercio.distancia
+          )
             ? `
 
               <span
@@ -910,17 +1581,24 @@ function tarjetaComercio(comercio) {
 
 
       <p class="business-location">
-        📍 ${comercio.localidad}
+        📍 ${ubicacionTexto || 'Partido de Morón'}
       </p>
 
 
       <div class="business-benefits">
 
-        ${beneficios
-          .map((beneficio) => {
-            const programa = programaPorId(beneficio.programa);
+        ${
+          beneficios
+            .map(
+              beneficio => {
 
-            return `
+                const programa =
+                  programaPorId(
+                    beneficio.programa
+                  );
+
+
+                return `
 
                   <div
                     class="benefit-box"
@@ -930,19 +1608,41 @@ function tarjetaComercio(comercio) {
                       class="benefit-program"
                     >
 
-                      ${programa ? programa.nombre : 'Beneficio'}
+                      ${
+                        programa
+                          ? programa.nombre
+                          : 'Beneficio'
+                      }
 
                     </span>
 
                     <strong>
-                      ${beneficio.beneficio}
+                      ${
+                        beneficio.beneficio ||
+                        'Beneficio disponible'
+                      }
                     </strong>
+
+                    ${
+                      beneficio.condiciones
+                        ? `
+
+                          <small>
+                            ${beneficio.condiciones}
+                          </small>
+
+                        `
+                        : ''
+                    }
 
                   </div>
 
                 `;
-          })
-          .join('')}
+
+              }
+            )
+            .join('')
+        }
 
       </div>
 
@@ -963,173 +1663,410 @@ function tarjetaComercio(comercio) {
     </article>
 
   `;
+
 }
+
 
 /* =====================================================
    MAPA
 ===================================================== */
 
 function crearMapa() {
+
   destruirMapa();
 
-  setTimeout(() => {
-    const elemento = document.querySelector('#map');
 
-    if (!elemento || typeof L === 'undefined') {
-      return;
-    }
+  setTimeout(
+    () => {
 
-    mapa = L.map('map').setView([-34.6495, -58.619], 13);
+      const elemento =
+        document.querySelector(
+          '#map'
+        );
 
-    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-      attribution: '&copy; OpenStreetMap',
-    }).addTo(mapa);
 
-    actualizarMapa(obtenerComerciosFiltrados());
-  }, 50);
-}
+      if (
+        !elemento ||
+        typeof L ===
+          'undefined'
+      ) {
 
-function destruirMapa() {
-  if (mapa) {
-    mapa.remove();
+        return;
 
-    mapa = null;
-  }
+      }
 
-  marcadores = [];
 
-  marcadorUsuario = null;
-}
+      mapa =
+        L.map(
+          'map'
+        )
+          .setView(
+            [
+              -34.6495,
+              -58.619,
+            ],
+            13
+          );
 
-function actualizarMapa(comerciosMostrar) {
-  if (!mapa) {
-    return;
-  }
 
-  marcadores.forEach((marcador) => marcador.remove());
+      L.tileLayer(
+        'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
+        {
 
-  marcadores = [];
+          attribution:
+            '&copy; OpenStreetMap',
 
-  if (marcadorUsuario) {
-    marcadorUsuario.remove();
+        }
+      )
+        .addTo(
+          mapa
+        );
 
-    marcadorUsuario = null;
-  }
 
-  comerciosMostrar.forEach((comercio) => {
-    const beneficios = beneficiosVisibles(comercio);
-
-    const beneficiosPopup = beneficios
-      .map((beneficio) => {
-        const programa = programaPorId(beneficio.programa);
-
-        return `
-
-                <div
-                  style="margin-top:8px"
-                >
-
-                  <small>
-                    ${programa ? programa.nombre : ''}
-                  </small>
-
-                  <br>
-
-                  <b>
-                    ${beneficio.beneficio}
-                  </b>
-
-                </div>
-
-              `;
-      })
-      .join('');
-
-    const marcador = L.marker([comercio.lat, comercio.lng])
-      .addTo(mapa)
-      .bindPopup(
-        `
-
-              <strong>
-                ${comercio.nombre}
-              </strong>
-
-              <br>
-
-              ${comercio.rubro}
-
-              ${beneficiosPopup}
-
-            `
+      actualizarMapa(
+        obtenerComerciosFiltrados()
       );
 
-    marcador.on('click', () => {
-      registrarEvento('marcador_abierto', {
-        programa: programaSeleccionado,
+    },
+    50
+  );
 
-        comercio_id: comercio.id,
+}
 
-        rubro: comercio.rubro,
 
-        localidad: comercio.localidad,
-      });
-    });
+function destruirMapa() {
 
-    marcadores.push(marcador);
-  });
+  if (
+    mapa
+  ) {
 
-  if (comerciosMostrar.length && !ubicacionUsuario) {
-    const bounds = L.latLngBounds(
-      comerciosMostrar.map((comercio) => [comercio.lat, comercio.lng])
+    mapa.remove();
+
+    mapa =
+      null;
+
+  }
+
+
+  marcadores = [];
+
+  marcadorUsuario =
+    null;
+
+}
+
+
+function actualizarMapa(
+  comerciosMostrar
+) {
+
+  if (
+    !mapa
+  ) {
+
+    return;
+
+  }
+
+
+  marcadores.forEach(
+    marcador =>
+      marcador.remove()
+  );
+
+
+  marcadores = [];
+
+
+  if (
+    marcadorUsuario
+  ) {
+
+    marcadorUsuario.remove();
+
+    marcadorUsuario =
+      null;
+
+  }
+
+
+  const comerciosConCoordenadas =
+    comerciosMostrar.filter(
+      comercio =>
+        tieneCoordenadas(
+          comercio
+        )
     );
 
-    mapa.fitBounds(bounds, {
-      padding: [30, 30],
 
-      maxZoom: 14,
-    });
-  }
+  comerciosConCoordenadas
+    .forEach(
+      comercio => {
 
-  if (ubicacionUsuario) {
-    marcadorUsuario = L.circleMarker(
-      [ubicacionUsuario.lat, ubicacionUsuario.lng],
-      {
-        radius: 9,
+        const beneficios =
+          beneficiosVisibles(
+            comercio
+          );
+
+
+        const beneficiosPopup =
+          beneficios
+            .map(
+              beneficio => {
+
+                const programa =
+                  programaPorId(
+                    beneficio.programa
+                  );
+
+
+                return `
+
+                  <div
+                    style="margin-top:8px"
+                  >
+
+                    <small>
+                      ${
+                        programa
+                          ? programa.nombre
+                          : ''
+                      }
+                    </small>
+
+                    <br>
+
+                    <b>
+                      ${
+                        beneficio.beneficio ||
+                        ''
+                      }
+                    </b>
+
+                  </div>
+
+                `;
+
+              }
+            )
+            .join('');
+
+
+        const marcador =
+          L.marker(
+            [
+              Number(
+                comercio.lat
+              ),
+
+              Number(
+                comercio.lng
+              ),
+            ]
+          )
+            .addTo(
+              mapa
+            )
+            .bindPopup(
+              `
+
+                <strong>
+                  ${comercio.nombre}
+                </strong>
+
+                <br>
+
+                ${comercio.rubro || ''}
+
+                ${beneficiosPopup}
+
+              `
+            );
+
+
+        marcador.on(
+          'click',
+          () => {
+
+            registrarEvento(
+              'marcador_abierto',
+              {
+
+                programa:
+                  programaSeleccionado,
+
+                comercio_id:
+                  comercio.id,
+
+                rubro:
+                  comercio.rubro,
+
+                localidad:
+                  comercio.localidad,
+
+              }
+            );
+
+          }
+        );
+
+
+        marcadores.push(
+          marcador
+        );
+
       }
-    )
-      .addTo(mapa)
-      .bindPopup('Tu ubicación aproximada');
+    );
 
-    mapa.setView([ubicacionUsuario.lat, ubicacionUsuario.lng], 14);
+
+  if (
+    comerciosConCoordenadas.length &&
+    !ubicacionUsuario
+  ) {
+
+    const bounds =
+      L.latLngBounds(
+
+        comerciosConCoordenadas
+          .map(
+            comercio => [
+
+              Number(
+                comercio.lat
+              ),
+
+              Number(
+                comercio.lng
+              ),
+
+            ]
+          )
+
+      );
+
+
+    mapa.fitBounds(
+      bounds,
+      {
+
+        padding:
+          [
+            30,
+            30,
+          ],
+
+        maxZoom:
+          14,
+
+      }
+    );
+
   }
+
+
+  if (
+    ubicacionUsuario
+  ) {
+
+    marcadorUsuario =
+      L.circleMarker(
+        [
+          ubicacionUsuario.lat,
+          ubicacionUsuario.lng,
+        ],
+        {
+          radius:
+            9,
+        }
+      )
+        .addTo(
+          mapa
+        )
+        .bindPopup(
+          'Tu ubicación aproximada'
+        );
+
+
+    mapa.setView(
+      [
+        ubicacionUsuario.lat,
+        ubicacionUsuario.lng,
+      ],
+      14
+    );
+
+  }
+
 }
+
 
 /* =====================================================
    DETALLE COMERCIO
 ===================================================== */
 
-function abrirDetalle(id) {
-  const comercio = comercios.find((comercio) => comercio.id === id);
+function abrirDetalle(
+  id
+) {
 
-  if (!comercio) {
+  const comercio =
+    comercios.find(
+      comercio =>
+        comercio.id === id
+    );
+
+
+  if (
+    !comercio
+  ) {
+
     return;
+
   }
 
-  registrarEvento('detalle_comercio', {
-    programa: programaSeleccionado,
 
-    comercio_id: comercio.id,
+  registrarEvento(
+    'detalle_comercio',
+    {
 
-    rubro: comercio.rubro,
+      programa:
+        programaSeleccionado,
 
-    localidad: comercio.localidad,
-  });
+      comercio_id:
+        comercio.id,
 
-  const beneficios = beneficiosVisibles(comercio);
+      rubro:
+        comercio.rubro,
 
-  const modal = document.querySelector('#modal');
+      localidad:
+        comercio.localidad,
 
-  const contenido = document.querySelector('#modal-contenido');
+    }
+  );
+
+
+  const beneficios =
+    beneficiosVisibles(
+      comercio
+    );
+
+
+  const modal =
+    document.querySelector(
+      '#modal'
+    );
+
+
+  const contenido =
+    document.querySelector(
+      '#modal-contenido'
+    );
+
+
+  const poseeCoordenadas =
+    tieneCoordenadas(
+      comercio
+    );
+
 
   contenido.innerHTML = `
 
@@ -1143,7 +2080,7 @@ function abrirDetalle(id) {
 
 
     <span class="category-badge">
-      ${comercio.rubro}
+      ${comercio.rubro || 'Comercio'}
     </span>
 
 
@@ -1153,7 +2090,18 @@ function abrirDetalle(id) {
 
 
     <p class="modal-address">
-      📍 ${comercio.direccion}
+
+      📍
+
+      ${
+        [
+          comercio.direccion,
+          comercio.localidad,
+        ]
+          .filter(Boolean)
+          .join(' · ')
+      }
+
     </p>
 
 
@@ -1164,186 +2112,334 @@ function abrirDetalle(id) {
       </span>
 
 
-      ${beneficios
-        .map((beneficio) => {
-          const programa = programaPorId(beneficio.programa);
+      ${
+        beneficios
+          .map(
+            beneficio => {
 
-          return `
+              const programa =
+                programaPorId(
+                  beneficio.programa
+                );
+
+
+              return `
 
                 <div
                   class="modal-benefit"
                 >
 
                   <small>
-                    ${programa ? programa.nombre : ''}
+                    ${
+                      programa
+                        ? programa.nombre
+                        : ''
+                    }
                   </small>
 
                   <strong>
-                    ${beneficio.beneficio}
+                    ${
+                      beneficio.beneficio ||
+                      'Beneficio disponible'
+                    }
                   </strong>
 
-                  <p>
-                    ${beneficio.condiciones}
-                  </p>
+                  ${
+                    beneficio.condiciones
+                      ? `
+
+                        <p>
+                          ${beneficio.condiciones}
+                        </p>
+
+                      `
+                      : ''
+                  }
 
                 </div>
 
               `;
-        })
-        .join('')}
+
+            }
+          )
+          .join('')
+      }
 
     </div>
 
 
-    <div class="business-data">
+    ${
+      poseeCoordenadas
+        ? `
 
-      <div>
+          <a
+            class="route-button"
+            target="_blank"
+            rel="noopener"
+            href="https://www.google.com/maps/dir/?api=1&destination=${
+              comercio.lat
+            },${
+              comercio.lng
+            }"
+            id="como-llegar"
+          >
 
-        <span>
-          Horarios
-        </span>
+            Cómo llegar
 
-        <strong>
-          ${comercio.horario}
-        </strong>
+            <span>
+              →
+            </span>
 
-      </div>
+          </a>
 
+        `
+        : `
 
-      <div>
+          <p
+            class="modal-address"
+            style="margin-top:20px"
+          >
+            La ubicación en el mapa está
+            pendiente de confirmar.
+          </p>
 
-        <span>
-          Teléfono
-        </span>
-
-        <strong>
-          ${comercio.telefono}
-        </strong>
-
-      </div>
-
-    </div>
-
-
-    <a
-      class="route-button"
-      target="_blank"
-      rel="noopener"
-      href="https://www.google.com/maps/dir/?api=1&destination=${
-        comercio.lat
-      },${comercio.lng}"
-      id="como-llegar"
-    >
-
-      Cómo llegar
-
-      <span>
-        →
-      </span>
-
-    </a>
+        `
+    }
 
   `;
 
-  modal.classList.remove('hidden');
+
+  modal.classList.remove(
+    'hidden'
+  );
+
 
   document
-    .querySelector('#cerrar-modal')
-    .addEventListener('click', cerrarModal);
+    .querySelector(
+      '#cerrar-modal'
+    )
+    .addEventListener(
+      'click',
+      cerrarModal
+    );
 
-  modal.onclick = (event) => {
-    if (event.target === modal) {
-      cerrarModal();
-    }
-  };
 
-  document.querySelector('#como-llegar').addEventListener('click', () => {
-    registrarEvento('como_llegar', {
-      programa: programaSeleccionado,
+  modal.onclick =
+    event => {
 
-      comercio_id: comercio.id,
+      if (
+        event.target ===
+        modal
+      ) {
 
-      rubro: comercio.rubro,
+        cerrarModal();
 
-      localidad: comercio.localidad,
-    });
-  });
+      }
+
+    };
+
+
+  if (
+    poseeCoordenadas
+  ) {
+
+    document
+      .querySelector(
+        '#como-llegar'
+      )
+      ?.addEventListener(
+        'click',
+        () => {
+
+          registrarEvento(
+            'como_llegar',
+            {
+
+              programa:
+                programaSeleccionado,
+
+              comercio_id:
+                comercio.id,
+
+              rubro:
+                comercio.rubro,
+
+              localidad:
+                comercio.localidad,
+
+            }
+          );
+
+        }
+      );
+
+  }
+
 }
+
 
 function cerrarModal() {
-  const modal = document.querySelector('#modal');
 
-  if (modal) {
-    modal.classList.add('hidden');
+  const modal =
+    document.querySelector(
+      '#modal'
+    );
+
+
+  if (
+    modal
+  ) {
+
+    modal.classList.add(
+      'hidden'
+    );
+
   }
+
 }
+
 
 /* =====================================================
    CERCA MÍO
 ===================================================== */
 
 function solicitarUbicacion() {
-  if (!navigator.geolocation) {
-    alert('Tu dispositivo no permite utilizar ubicación.');
+
+  if (
+    !navigator.geolocation
+  ) {
+
+    alert(
+      'Tu dispositivo no permite utilizar ubicación.'
+    );
+
 
     return;
+
   }
 
-  navigator.geolocation.getCurrentPosition(
-    (posicion) => {
-      ubicacionUsuario = {
-        lat: posicion.coords.latitude,
 
-        lng: posicion.coords.longitude,
-      };
+  navigator.geolocation
+    .getCurrentPosition(
 
-      registrarEvento('cerca_mio', {
-        programa: programaSeleccionado,
+      posicion => {
 
-        rubro: rubroSeleccionado,
+        ubicacionUsuario = {
 
-        localidad: localidadSeleccionada,
-      });
+          lat:
+            posicion
+              .coords
+              .latitude,
 
-      renderExplorar();
-    },
+          lng:
+            posicion
+              .coords
+              .longitude,
 
-    () => {
-      registrarEvento('ubicacion_rechazada', {
-        programa: programaSeleccionado,
-      });
+        };
 
-      alert(
-        'No pudimos acceder a tu ubicación. Podés seguir buscando manualmente.'
-      );
-    },
 
-    {
-      enableHighAccuracy: false,
+        registrarEvento(
+          'cerca_mio',
+          {
 
-      timeout: 10000,
-    }
-  );
+            programa:
+              programaSeleccionado,
+
+            rubro:
+              rubroSeleccionado,
+
+            localidad:
+              localidadSeleccionada,
+
+          }
+        );
+
+
+        renderExplorar();
+
+      },
+
+
+      () => {
+
+        registrarEvento(
+          'ubicacion_rechazada',
+          {
+            programa:
+              programaSeleccionado,
+          }
+        );
+
+
+        alert(
+          'No pudimos acceder a tu ubicación. Podés seguir buscando manualmente.'
+        );
+
+      },
+
+
+      {
+
+        enableHighAccuracy:
+          false,
+
+        timeout:
+          10000,
+
+      }
+
+    );
+
 }
+
 
 /* =====================================================
    INICIO
 ===================================================== */
 
-registrarEvento('app_abierta', {
-  programa: programaSeleccionado,
-});
+registrarEvento(
+  'app_abierta',
+  {
+    programa:
+      programaSeleccionado,
+  }
+);
+
 
 renderHome();
+
 
 /* =====================================================
    PWA
 ===================================================== */
 
-if ('serviceWorker' in navigator) {
-  window.addEventListener('load', () => {
-    navigator.serviceWorker.register('/sw.js').catch((error) => {
-      console.log('Service Worker:', error);
-    });
-  });
+if (
+  'serviceWorker'
+  in navigator
+) {
+
+  window.addEventListener(
+    'load',
+    () => {
+
+      navigator
+        .serviceWorker
+        .register(
+          '/sw.js'
+        )
+        .catch(
+          error => {
+
+            console.log(
+              'Service Worker:',
+              error
+            );
+
+          }
+        );
+
+    }
+  );
+
 }
