@@ -14,9 +14,12 @@ const app =
   document.querySelector('#app');
 
 
+/* =====================================================
+   ESTADO
+===================================================== */
+
 let programaSeleccionado =
-  localStorage.getItem('mta_programa') ||
-  null;
+  localStorage.getItem('mta_programa') || null;
 
 let busqueda = '';
 
@@ -32,6 +35,8 @@ let marcadores = [];
 
 let marcadorUsuario = null;
 
+let contadorMapaControl = null;
+
 let temporizadorBusqueda = null;
 
 
@@ -43,17 +48,175 @@ if (
   programaSeleccionado &&
   !programas.some(
     programa =>
-      programa.id ===
-      programaSeleccionado
+      programa.id === programaSeleccionado
   )
 ) {
-
   programaSeleccionado = null;
 
   localStorage.removeItem(
     'mta_programa'
   );
+}
 
+
+/* =====================================================
+   UTILIDADES
+===================================================== */
+
+function escaparHtml(valor = '') {
+  return String(valor ?? '')
+    .replaceAll('&', '&amp;')
+    .replaceAll('<', '&lt;')
+    .replaceAll('>', '&gt;')
+    .replaceAll('"', '&quot;')
+    .replaceAll("'", '&#039;');
+}
+
+
+function normalizar(texto = '') {
+  return String(texto || '')
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(
+      /[\u0300-\u036f]/g,
+      ''
+    );
+}
+
+
+function programaPorId(id) {
+  return programas.find(
+    programa =>
+      programa.id === id
+  );
+}
+
+
+function limpiarFiltros() {
+  busqueda = '';
+
+  rubroSeleccionado = '';
+
+  localidadSeleccionada = '';
+
+  ubicacionUsuario = null;
+}
+
+
+function beneficiosVisibles(
+  comercio
+) {
+  const beneficios =
+    comercio.beneficios || [];
+
+  if (!programaSeleccionado) {
+    return beneficios;
+  }
+
+  return beneficios.filter(
+    beneficio =>
+      beneficio.programa ===
+      programaSeleccionado
+  );
+}
+
+
+/* =====================================================
+   VALIDACIÓN DE COORDENADAS
+===================================================== */
+
+function tieneCoordenadasValidas(
+  comercio
+) {
+  const lat =
+    Number(comercio?.lat);
+
+  const lng =
+    Number(comercio?.lng);
+
+
+  if (
+    !Number.isFinite(lat) ||
+    !Number.isFinite(lng)
+  ) {
+    return false;
+  }
+
+
+  /*
+   * Nunca aceptar 0,0.
+   */
+
+  if (
+    lat === 0 ||
+    lng === 0
+  ) {
+    return false;
+  }
+
+
+  /*
+   * Zona amplia alrededor
+   * del Partido de Morón.
+   *
+   * Esto evita que una mala
+   * geolocalización mande un
+   * comercio al océano,
+   * otra provincia, etc.
+   */
+
+  const dentroZonaMoron =
+    lat >= -34.78 &&
+    lat <= -34.52 &&
+    lng >= -58.80 &&
+    lng <= -58.45;
+
+
+  return dentroZonaMoron;
+}
+
+
+/* =====================================================
+   DISTANCIA
+===================================================== */
+
+function distanciaKm(
+  lat1,
+  lon1,
+  lat2,
+  lon2
+) {
+  const R = 6371;
+
+  const dLat =
+    ((lat2 - lat1) * Math.PI) / 180;
+
+  const dLon =
+    ((lon2 - lon1) * Math.PI) / 180;
+
+
+  const a =
+    Math.sin(dLat / 2) ** 2 +
+
+    Math.cos(
+      (lat1 * Math.PI) / 180
+    ) *
+
+    Math.cos(
+      (lat2 * Math.PI) / 180
+    ) *
+
+    Math.sin(dLon / 2) ** 2;
+
+
+  return (
+    R *
+    2 *
+    Math.atan2(
+      Math.sqrt(a),
+      Math.sqrt(1 - a)
+    )
+  );
 }
 
 
@@ -64,214 +227,34 @@ if (
 function logoMoron(
   clase = ''
 ) {
-
   return `
-
-    <span class="moron-symbol ${clase}">
+    <span
+      class="moron-symbol ${clase}"
+    >
 
       <span
-        class="moron-bar moron-bar-left"
+        class="
+          moron-bar
+          moron-bar-left
+        "
       ></span>
 
       <span
-        class="moron-bar moron-bar-center"
+        class="
+          moron-bar
+          moron-bar-center
+        "
       ></span>
 
       <span
-        class="moron-bar moron-bar-right"
+        class="
+          moron-bar
+          moron-bar-right
+        "
       ></span>
 
     </span>
-
   `;
-
-}
-
-
-/* =====================================================
-   UTILIDADES
-===================================================== */
-
-function programaPorId(
-  id
-) {
-
-  return programas.find(
-    programa =>
-      programa.id === id
-  );
-
-}
-
-
-function normalizar(
-  texto = ''
-) {
-
-  return String(texto)
-    .toLowerCase()
-    .normalize('NFD')
-    .replace(
-      /[\u0300-\u036f]/g,
-      ''
-    );
-
-}
-
-
-function numeroValido(
-  valor
-) {
-
-  if (
-    valor === null ||
-    valor === undefined ||
-    valor === ''
-  ) {
-
-    return null;
-
-  }
-
-
-  const numero =
-    Number(valor);
-
-
-  return Number.isFinite(numero)
-    ? numero
-    : null;
-
-}
-
-
-function tieneCoordenadas(
-  comercio
-) {
-
-  const lat =
-    numeroValido(
-      comercio?.lat
-    );
-
-  const lng =
-    numeroValido(
-      comercio?.lng
-    );
-
-
-  return (
-    lat !== null &&
-    lng !== null &&
-    lat >= -90 &&
-    lat <= 90 &&
-    lng >= -180 &&
-    lng <= 180
-  );
-
-}
-
-
-function distanciaKm(
-  lat1,
-  lon1,
-  lat2,
-  lon2
-) {
-
-  const R =
-    6371;
-
-
-  const dLat =
-    (
-      (
-        lat2 -
-        lat1
-      ) *
-      Math.PI
-    ) /
-    180;
-
-
-  const dLon =
-    (
-      (
-        lon2 -
-        lon1
-      ) *
-      Math.PI
-    ) /
-    180;
-
-
-  const a =
-    Math.sin(
-      dLat / 2
-    ) ** 2 +
-
-    Math.cos(
-      (
-        lat1 *
-        Math.PI
-      ) /
-      180
-    ) *
-
-    Math.cos(
-      (
-        lat2 *
-        Math.PI
-      ) /
-      180
-    ) *
-
-    Math.sin(
-      dLon / 2
-    ) ** 2;
-
-
-  return (
-    R *
-    2 *
-    Math.atan2(
-      Math.sqrt(a),
-      Math.sqrt(
-        1 - a
-      )
-    )
-  );
-
-}
-
-
-function beneficiosVisibles(
-  comercio
-) {
-
-  const beneficios =
-    Array.isArray(
-      comercio?.beneficios
-    )
-      ? comercio.beneficios
-      : [];
-
-
-  if (
-    !programaSeleccionado
-  ) {
-
-    return beneficios;
-
-  }
-
-
-  return beneficios.filter(
-    beneficio =>
-      beneficio.programa ===
-      programaSeleccionado
-  );
-
 }
 
 
@@ -280,9 +263,7 @@ function beneficiosVisibles(
 ===================================================== */
 
 function renderHome() {
-
   destruirMapa();
-
 
   app.innerHTML = `
 
@@ -328,11 +309,9 @@ function renderHome() {
           </h1>
 
           <p>
-
             Consultá comercios adheridos,
             descuentos y servicios disponibles
             según tu programa.
-
           </p>
 
         </section>
@@ -476,7 +455,11 @@ function renderHome() {
     )
     .addEventListener(
       'click',
-      renderProgramas
+      () => {
+        limpiarFiltros();
+
+        renderProgramas();
+      }
     );
 
 
@@ -487,18 +470,16 @@ function renderHome() {
     .addEventListener(
       'click',
       () => {
-
         programaSeleccionado =
           null;
 
+        limpiarFiltros();
 
         localStorage.removeItem(
           'mta_programa'
         );
 
-
         renderExplorar();
-
       }
     );
 
@@ -510,20 +491,18 @@ function renderHome() {
     .addEventListener(
       'click',
       () => {
-
         programaSeleccionado =
           null;
 
+        limpiarFiltros();
 
         localStorage.removeItem(
           'mta_programa'
         );
 
-
         renderExplorar(
           true
         );
-
       }
     );
 
@@ -534,9 +513,19 @@ function renderHome() {
     )
     .addEventListener(
       'click',
-      solicitarUbicacion
-    );
+      () => {
+        programaSeleccionado =
+          null;
 
+        limpiarFiltros();
+
+        localStorage.removeItem(
+          'mta_programa'
+        );
+
+        solicitarUbicacion();
+      }
+    );
 }
 
 
@@ -545,9 +534,7 @@ function renderHome() {
 ===================================================== */
 
 function renderProgramas() {
-
   destruirMapa();
-
 
   app.innerHTML = `
 
@@ -598,61 +585,77 @@ function renderProgramas() {
 
       <section class="program-grid">
 
-        ${
-          programas
-            .map(
-              programa => `
+        ${programas
+          .map(
+            programa => `
 
-                <button
-                  class="program-image-card"
-                  data-programa="${programa.id}"
+              <button
+                class="program-image-card"
+                data-programa="${
+                  programa.id
+                }"
+              >
+
+                <div
+                  class="
+                    program-image-container
+                  "
+                >
+
+                  <img
+                    src="${
+                      programa.imagen
+                    }"
+                    alt="${
+                      escaparHtml(
+                        programa.nombre
+                      )
+                    }"
+                    class="program-image"
+                  />
+
+                </div>
+
+
+                <div
+                  class="
+                    program-card-footer
+                  "
                 >
 
                   <div
-                    class="program-image-container"
+                    class="
+                      program-card-text
+                    "
                   >
 
-                    <img
-                      src="${programa.imagen}"
-                      alt="${programa.nombre}"
-                      class="program-image"
-                    />
+                    <strong>
+                      ${
+                        escaparHtml(
+                          programa.nombre
+                        )
+                      }
+                    </strong>
+
+                    <small>
+                      Ver comercios adheridos
+                    </small>
 
                   </div>
 
-
-                  <div
-                    class="program-card-footer"
+                  <span
+                    class="program-arrow"
                   >
+                    ›
+                  </span>
 
-                    <div
-                      class="program-card-text"
-                    >
+                </div>
 
-                      <strong>
-                        ${programa.nombre}
-                      </strong>
+              </button>
 
-                      <small>
-                        Ver comercios adheridos
-                      </small>
-
-                    </div>
-
-                    <span
-                      class="program-arrow"
-                    >
-                      ›
-                    </span>
-
-                  </div>
-
-                </button>
-
-              `
-            )
-            .join('')
-        }
+            `
+          )
+          .join('')}
 
       </section>
 
@@ -661,10 +664,8 @@ function renderProgramas() {
         class="all-benefits-button"
         id="ver-todos"
       >
-
         Ver todos los programas
         y comercios
-
       </button>
 
     </main>
@@ -689,10 +690,10 @@ function renderProgramas() {
     .addEventListener(
       'click',
       () => {
-
         programaSeleccionado =
           null;
 
+        limpiarFiltros();
 
         localStorage.removeItem(
           'mta_programa'
@@ -705,7 +706,6 @@ function renderProgramas() {
 
 
         renderExplorar();
-
       }
     );
 
@@ -716,13 +716,19 @@ function renderProgramas() {
     )
     .forEach(
       card => {
-
         card.addEventListener(
           'click',
           () => {
-
             programaSeleccionado =
               card.dataset.programa;
+
+
+            /*
+             * Evita arrastrar
+             * filtros de otro programa.
+             */
+
+            limpiarFiltros();
 
 
             localStorage.setItem(
@@ -740,99 +746,76 @@ function renderProgramas() {
             );
 
 
-            rubroSeleccionado =
-              '';
-
-            localidadSeleccionada =
-              '';
-
-            busqueda =
-              '';
-
-
             renderExplorar();
-
           }
         );
-
       }
     );
-
 }
 
 
 /* =====================================================
-   FILTROS
+   FILTRAR COMERCIOS
 ===================================================== */
 
 function obtenerComerciosFiltrados() {
-
-  let resultado =
-    [...comercios];
+  let resultado = [
+    ...comercios,
+  ];
 
 
   if (
     programaSeleccionado
   ) {
-
     resultado =
       resultado.filter(
         comercio =>
-          Array.isArray(
-            comercio.beneficios
-          ) &&
-          comercio.beneficios.some(
+          (
+            comercio.beneficios ||
+            []
+          ).some(
             beneficio =>
               beneficio.programa ===
               programaSeleccionado
           )
       );
-
   }
 
 
   if (
     rubroSeleccionado
   ) {
-
     resultado =
       resultado.filter(
         comercio =>
           comercio.rubro ===
           rubroSeleccionado
       );
-
   }
 
 
   if (
     localidadSeleccionada
   ) {
-
     resultado =
       resultado.filter(
         comercio =>
           comercio.localidad ===
           localidadSeleccionada
       );
-
   }
 
 
   if (
     busqueda.trim()
   ) {
-
     const texto =
-      normalizar(
-        busqueda
-      );
+      normalizar(busqueda);
 
 
     resultado =
       resultado.filter(
         comercio => {
-
           const beneficiosTexto =
             (
               comercio.beneficios ||
@@ -840,7 +823,6 @@ function obtenerComerciosFiltrados() {
             )
               .map(
                 beneficio => {
-
                   const programa =
                     programaPorId(
                       beneficio.programa
@@ -848,7 +830,6 @@ function obtenerComerciosFiltrados() {
 
 
                   return `
-
                     ${
                       programa?.nombre ||
                       ''
@@ -863,9 +844,7 @@ function obtenerComerciosFiltrados() {
                       beneficio.condiciones ||
                       ''
                     }
-
                   `;
-
                 }
               )
               .join(' ');
@@ -874,64 +853,55 @@ function obtenerComerciosFiltrados() {
           const contenido =
             normalizar(
               `
-
                 ${comercio.nombre || ''}
-
                 ${comercio.rubro || ''}
-
                 ${comercio.localidad || ''}
-
                 ${comercio.direccion || ''}
-
                 ${beneficiosTexto}
-
               `
             );
 
 
-          return contenido.includes(
-            texto
+          return (
+            contenido.includes(
+              texto
+            )
           );
-
         }
       );
-
   }
 
+
+  /*
+   * CERCA MÍO
+   */
 
   if (
     ubicacionUsuario
   ) {
-
     resultado =
       resultado.map(
         comercio => {
-
           if (
-            !tieneCoordenadas(
+            !tieneCoordenadasValidas(
               comercio
             )
           ) {
-
             return {
               ...comercio,
 
               distancia:
                 null,
             };
-
           }
 
 
           return {
-
             ...comercio,
 
             distancia:
               distanciaKm(
-
                 ubicacionUsuario.lat,
-
                 ubicacionUsuario.lng,
 
                 Number(
@@ -941,50 +911,43 @@ function obtenerComerciosFiltrados() {
                 Number(
                   comercio.lng
                 )
-
               ),
-
           };
-
         }
       );
 
 
     resultado.sort(
-      (
-        a,
-        b
-      ) => {
+      (a, b) => {
+        if (
+          a.distancia === null &&
+          b.distancia === null
+        ) {
+          return 0;
+        }
 
-        const distanciaA =
-          Number.isFinite(
-            a.distancia
-          )
-            ? a.distancia
-            : Infinity;
+        if (
+          a.distancia === null
+        ) {
+          return 1;
+        }
 
-
-        const distanciaB =
-          Number.isFinite(
-            b.distancia
-          )
-            ? b.distancia
-            : Infinity;
-
+        if (
+          b.distancia === null
+        ) {
+          return -1;
+        }
 
         return (
-          distanciaA -
-          distanciaB
+          a.distancia -
+          b.distancia
         );
-
       }
     );
-
   }
 
 
   return resultado;
-
 }
 
 
@@ -995,50 +958,47 @@ function obtenerComerciosFiltrados() {
 function renderExplorar(
   enfocarBusqueda = false
 ) {
-
   const programa =
     programaPorId(
       programaSeleccionado
     );
 
 
-  const rubros =
-    [
-      ...new Set(
-
-        comercios
-          .map(
-            comercio =>
-              comercio.rubro
-          )
-          .filter(Boolean)
-
-      ),
-    ].sort();
+  const rubros = [
+    ...new Set(
+      comercios
+        .map(
+          comercio =>
+            comercio.rubro
+        )
+        .filter(Boolean)
+    ),
+  ].sort();
 
 
-  const localidades =
-    [
-      ...new Set(
-
-        comercios
-          .map(
-            comercio =>
-              comercio.localidad
-          )
-          .filter(Boolean)
-
-      ),
-    ].sort();
+  const localidades = [
+    ...new Set(
+      comercios
+        .map(
+          comercio =>
+            comercio.localidad
+        )
+        .filter(Boolean)
+    ),
+  ].sort();
 
 
   app.innerHTML = `
 
     <main class="explore-page">
 
-      <header class="explore-header">
+      <header
+        class="explore-header"
+      >
 
-        <div class="explore-top">
+        <div
+          class="explore-top"
+        >
 
           <button
             class="back-button"
@@ -1049,28 +1009,34 @@ function renderExplorar(
           </button>
 
 
-          <div class="explore-title">
+          <div
+            class="explore-title"
+          >
 
-            <div class="internal-brand">
+            <div
+              class="internal-brand"
+            >
 
               ${logoMoron(
                 'moron-symbol-small'
               )}
 
-              <span class="mini-brand">
+              <span
+                class="mini-brand"
+              >
                 MORÓN TE ACOMPAÑA
               </span>
 
             </div>
 
             <h2>
-
               ${
                 programa
-                  ? programa.nombre
+                  ? escaparHtml(
+                      programa.nombre
+                    )
                   : 'Todos los beneficios'
               }
-
             </h2>
 
           </div>
@@ -1086,7 +1052,9 @@ function renderExplorar(
         </div>
 
 
-        <div class="search-box">
+        <div
+          class="search-box"
+        >
 
           <span>
             ⌕
@@ -1096,7 +1064,11 @@ function renderExplorar(
             id="buscador"
             type="search"
             placeholder="Buscar comercio, rubro o beneficio..."
-            value="${busqueda}"
+            value="${
+              escaparHtml(
+                busqueda
+              )
+            }"
           />
 
         </div>
@@ -1112,27 +1084,31 @@ function renderExplorar(
               Todos los rubros
             </option>
 
-            ${
-              rubros
-                .map(
-                  rubro => `
-
-                    <option
-                      value="${rubro}"
-                      ${
-                        rubroSeleccionado ===
+            ${rubros
+              .map(
+                rubro => `
+                  <option
+                    value="${
+                      escaparHtml(
                         rubro
-                          ? 'selected'
-                          : ''
-                      }
-                    >
-                      ${rubro}
-                    </option>
-
-                  `
-                )
-                .join('')
-            }
+                      )
+                    }"
+                    ${
+                      rubroSeleccionado ===
+                      rubro
+                        ? 'selected'
+                        : ''
+                    }
+                  >
+                    ${
+                      escaparHtml(
+                        rubro
+                      )
+                    }
+                  </option>
+                `
+              )
+              .join('')}
 
           </select>
 
@@ -1145,27 +1121,31 @@ function renderExplorar(
               Todas las localidades
             </option>
 
-            ${
-              localidades
-                .map(
-                  localidad => `
-
-                    <option
-                      value="${localidad}"
-                      ${
-                        localidadSeleccionada ===
+            ${localidades
+              .map(
+                localidad => `
+                  <option
+                    value="${
+                      escaparHtml(
                         localidad
-                          ? 'selected'
-                          : ''
-                      }
-                    >
-                      ${localidad}
-                    </option>
-
-                  `
-                )
-                .join('')
-            }
+                      )
+                    }"
+                    ${
+                      localidadSeleccionada ===
+                      localidad
+                        ? 'selected'
+                        : ''
+                    }
+                  >
+                    ${
+                      escaparHtml(
+                        localidad
+                      )
+                    }
+                  </option>
+                `
+              )
+              .join('')}
 
           </select>
 
@@ -1182,14 +1162,21 @@ function renderExplorar(
       </header>
 
 
-      <section class="explore-layout">
+      <section
+        class="explore-layout"
+      >
 
-        <div class="results-column">
+        <div
+          class="results-column"
+        >
 
-          <div class="results-header">
+          <div
+            class="results-header"
+          >
 
-            <strong id="contador">
-            </strong>
+            <strong
+              id="contador"
+            ></strong>
 
             <span>
               Comercios adheridos
@@ -1206,9 +1193,13 @@ function renderExplorar(
         </div>
 
 
-        <div class="map-column">
+        <div
+          class="map-column"
+        >
 
-          <div id="map"></div>
+          <div
+            id="map"
+          ></div>
 
         </div>
 
@@ -1218,7 +1209,10 @@ function renderExplorar(
 
 
     <div
-      class="modal-backdrop hidden"
+      class="
+        modal-backdrop
+        hidden
+      "
       id="modal"
     >
 
@@ -1261,7 +1255,6 @@ function renderExplorar(
   buscador.addEventListener(
     'input',
     event => {
-
       busqueda =
         event.target.value;
 
@@ -1277,17 +1270,14 @@ function renderExplorar(
       temporizadorBusqueda =
         setTimeout(
           () => {
-
             if (
               busqueda
                 .trim()
                 .length >= 2
             ) {
-
               registrarEvento(
                 'busqueda',
                 {
-
                   programa:
                     programaSeleccionado,
 
@@ -1299,16 +1289,12 @@ function renderExplorar(
 
                   localidad:
                     localidadSeleccionada,
-
                 }
               );
-
             }
-
           },
           700
         );
-
     }
   );
 
@@ -1320,7 +1306,6 @@ function renderExplorar(
     .addEventListener(
       'change',
       event => {
-
         rubroSeleccionado =
           event.target.value;
 
@@ -1328,20 +1313,17 @@ function renderExplorar(
         registrarEvento(
           'filtro_rubro',
           {
-
             programa:
               programaSeleccionado,
 
             rubro:
               rubroSeleccionado ||
               'todos',
-
           }
         );
 
 
         actualizarResultados();
-
       }
     );
 
@@ -1353,7 +1335,6 @@ function renderExplorar(
     .addEventListener(
       'change',
       event => {
-
         localidadSeleccionada =
           event.target.value;
 
@@ -1361,20 +1342,17 @@ function renderExplorar(
         registrarEvento(
           'filtro_localidad',
           {
-
             programa:
               programaSeleccionado,
 
             localidad:
               localidadSeleccionada ||
               'todas',
-
           }
         );
 
 
         actualizarResultados();
-
       }
     );
 
@@ -1391,22 +1369,18 @@ function renderExplorar(
 
   crearMapa();
 
-
   actualizarResultados();
 
 
   if (
     enfocarBusqueda
   ) {
-
     setTimeout(
       () =>
         buscador.focus(),
       100
     );
-
   }
-
 }
 
 
@@ -1415,7 +1389,6 @@ function renderExplorar(
 ===================================================== */
 
 function actualizarResultados() {
-
   const resultado =
     obtenerComerciosFiltrados();
 
@@ -1436,9 +1409,7 @@ function actualizarResultados() {
     !lista ||
     !contador
   ) {
-
     return;
-
   }
 
 
@@ -1453,7 +1424,6 @@ function actualizarResultados() {
   if (
     !resultado.length
   ) {
-
     lista.innerHTML = `
 
       <div class="empty-state">
@@ -1474,9 +1444,7 @@ function actualizarResultados() {
       </div>
 
     `;
-
   } else {
-
     lista.innerHTML =
       resultado
         .map(
@@ -1486,7 +1454,6 @@ function actualizarResultados() {
             )
         )
         .join('');
-
   }
 
 
@@ -1496,22 +1463,17 @@ function actualizarResultados() {
     )
     .forEach(
       button => {
-
         button.addEventListener(
           'click',
           () => {
-
             abrirDetalle(
               Number(
-                button
-                  .dataset
+                button.dataset
                   .comercio
               )
             );
-
           }
         );
-
       }
     );
 
@@ -1519,137 +1481,145 @@ function actualizarResultados() {
   actualizarMapa(
     resultado
   );
-
 }
 
 
 /* =====================================================
-   TARJETAS DE COMERCIOS
+   TARJETA COMERCIO
 ===================================================== */
 
 function tarjetaComercio(
   comercio
 ) {
-
   const beneficios =
     beneficiosVisibles(
       comercio
     );
 
 
-  const ubicacionTexto =
-    [
-      comercio.direccion,
-      comercio.localidad,
-    ]
-      .filter(Boolean)
-      .join(' · ');
+  const distancia =
+    typeof comercio.distancia ===
+      'number'
+      ? `
+        <span
+          class="distance-badge"
+        >
+          ${
+            comercio.distancia
+              .toFixed(1)
+          } km
+        </span>
+      `
+      : '';
 
 
   return `
 
-    <article class="business-card">
+    <article
+      class="business-card"
+    >
 
-      <div class="business-card-top">
+      <div
+        class="
+          business-card-top
+        "
+      >
 
-        <span class="category-badge">
-          ${comercio.rubro || 'Comercio'}
+        <span
+          class="category-badge"
+        >
+          ${
+            escaparHtml(
+              comercio.rubro ||
+              'Comercio'
+            )
+          }
         </span>
 
-        ${
-          Number.isFinite(
-            comercio.distancia
-          )
-            ? `
-
-              <span
-                class="distance-badge"
-              >
-                ${comercio.distancia.toFixed(1)} km
-              </span>
-
-            `
-            : ''
-        }
+        ${distancia}
 
       </div>
 
 
       <h3>
-        ${comercio.nombre}
+        ${
+          escaparHtml(
+            comercio.nombre
+          )
+        }
       </h3>
 
 
-      <p class="business-location">
-        📍 ${ubicacionTexto || 'Partido de Morón'}
+      <p
+        class="business-location"
+      >
+        📍 ${
+          escaparHtml(
+            comercio.localidad ||
+            ''
+          )
+        }
       </p>
 
 
-      <div class="business-benefits">
+      <div
+        class="business-benefits"
+      >
 
-        ${
-          beneficios
-            .map(
-              beneficio => {
-
-                const programa =
-                  programaPorId(
-                    beneficio.programa
-                  );
+        ${beneficios
+          .map(
+            beneficio => {
+              const programa =
+                programaPorId(
+                  beneficio.programa
+                );
 
 
-                return `
+              return `
 
-                  <div
-                    class="benefit-box"
+                <div
+                  class="benefit-box"
+                >
+
+                  <span
+                    class="
+                      benefit-program
+                    "
                   >
-
-                    <span
-                      class="benefit-program"
-                    >
-
-                      ${
+                    ${
+                      escaparHtml(
                         programa
                           ? programa.nombre
                           : 'Beneficio'
-                      }
-
-                    </span>
-
-                    <strong>
-                      ${
-                        beneficio.beneficio ||
-                        'Beneficio disponible'
-                      }
-                    </strong>
-
-                    ${
-                      beneficio.condiciones
-                        ? `
-
-                          <small>
-                            ${beneficio.condiciones}
-                          </small>
-
-                        `
-                        : ''
+                      )
                     }
+                  </span>
 
-                  </div>
+                  <strong>
+                    ${
+                      escaparHtml(
+                        beneficio
+                          .beneficio ||
+                        ''
+                      )
+                    }
+                  </strong>
 
-                `;
+                </div>
 
-              }
-            )
-            .join('')
-        }
+              `;
+            }
+          )
+          .join('')}
 
       </div>
 
 
       <button
         class="business-button"
-        data-comercio="${comercio.id}"
+        data-comercio="${
+          comercio.id
+        }"
       >
 
         Ver detalle
@@ -1663,7 +1633,6 @@ function tarjetaComercio(
     </article>
 
   `;
-
 }
 
 
@@ -1672,13 +1641,11 @@ function tarjetaComercio(
 ===================================================== */
 
 function crearMapa() {
-
   destruirMapa();
 
 
   setTimeout(
     () => {
-
       const elemento =
         document.querySelector(
           '#map'
@@ -1690,82 +1657,257 @@ function crearMapa() {
         typeof L ===
           'undefined'
       ) {
-
         return;
-
       }
 
 
       mapa =
         L.map(
           'map'
-        )
-          .setView(
-            [
-              -34.6495,
-              -58.619,
-            ],
-            13
-          );
+        ).setView(
+          [
+            -34.6495,
+            -58.619,
+          ],
+          13
+        );
 
 
       L.tileLayer(
         'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
         {
-
           attribution:
             '&copy; OpenStreetMap',
-
         }
-      )
-        .addTo(
-          mapa
-        );
+      ).addTo(
+        mapa
+      );
 
 
       actualizarMapa(
         obtenerComerciosFiltrados()
       );
-
     },
     50
   );
-
 }
 
 
 function destruirMapa() {
-
   if (
     mapa
   ) {
-
     mapa.remove();
 
-    mapa =
-      null;
-
+    mapa = null;
   }
 
 
   marcadores = [];
 
-  marcadorUsuario =
-    null;
+  marcadorUsuario = null;
 
+  contadorMapaControl =
+    null;
 }
 
+
+/* =====================================================
+   POPUP MAPA
+===================================================== */
+
+function contenidoPopupMapa(
+  comercio
+) {
+  const beneficios =
+    beneficiosVisibles(
+      comercio
+    );
+
+
+  const beneficiosHtml =
+    beneficios
+      .map(
+        beneficio => {
+          const programa =
+            programaPorId(
+              beneficio.programa
+            );
+
+
+          return `
+
+            <div
+              style="
+                margin-top:10px;
+                padding-top:8px;
+                border-top:
+                  1px solid #eee;
+              "
+            >
+
+              <small
+                style="
+                  display:block;
+                  margin-bottom:3px;
+                  font-weight:700;
+                  color:#777;
+                "
+              >
+                ${
+                  escaparHtml(
+                    programa
+                      ? programa.nombre
+                      : 'Beneficio'
+                  )
+                }
+              </small>
+
+              <strong
+                style="
+                  display:block;
+                  line-height:1.3;
+                "
+              >
+                ${
+                  escaparHtml(
+                    beneficio
+                      .beneficio ||
+                    ''
+                  )
+                }
+              </strong>
+
+            </div>
+
+          `;
+        }
+      )
+      .join('');
+
+
+  return `
+
+    <div
+      style="
+        min-width:190px;
+        max-width:240px;
+      "
+    >
+
+      <strong
+        style="
+          font-size:15px;
+          display:block;
+          margin-bottom:3px;
+        "
+      >
+        ${
+          escaparHtml(
+            comercio.nombre
+          )
+        }
+      </strong>
+
+
+      <span
+        style="
+          font-size:12px;
+          color:#666;
+        "
+      >
+        ${
+          escaparHtml(
+            comercio.rubro ||
+            ''
+          )
+        }
+      </span>
+
+
+      <div
+        style="
+          margin-top:9px;
+          line-height:1.35;
+          font-size:13px;
+        "
+      >
+
+        📍
+        ${
+          escaparHtml(
+            comercio.direccion ||
+            'Dirección pendiente'
+          )
+        }
+
+        ${
+          comercio.localidad
+            ? `
+              <br>
+              <span
+                style="
+                  margin-left:18px;
+                  color:#666;
+                "
+              >
+                ${
+                  escaparHtml(
+                    comercio.localidad
+                  )
+                }
+              </span>
+            `
+            : ''
+        }
+
+      </div>
+
+
+      ${beneficiosHtml}
+
+
+      <button
+        type="button"
+        onclick="
+          window.mtaAbrirDetalle(
+            ${Number(
+              comercio.id
+            )}
+          )
+        "
+        style="
+          width:100%;
+          margin-top:12px;
+          border:0;
+          border-radius:8px;
+          padding:9px 10px;
+          cursor:pointer;
+          font-weight:700;
+          background:#d71920;
+          color:white;
+        "
+      >
+        Ver detalle
+      </button>
+
+    </div>
+
+  `;
+}
+
+
+/* =====================================================
+   ACTUALIZAR MAPA
+===================================================== */
 
 function actualizarMapa(
   comerciosMostrar
 ) {
-
   if (
     !mapa
   ) {
-
     return;
-
   }
 
 
@@ -1781,77 +1923,43 @@ function actualizarMapa(
   if (
     marcadorUsuario
   ) {
-
     marcadorUsuario.remove();
 
-    marcadorUsuario =
-      null;
-
+    marcadorUsuario = null;
   }
 
 
-  const comerciosConCoordenadas =
+  if (
+    contadorMapaControl
+  ) {
+    contadorMapaControl.remove();
+
+    contadorMapaControl =
+      null;
+  }
+
+
+  /*
+   * Solo pasan al mapa
+   * coordenadas reales y
+   * ubicadas dentro de una
+   * zona razonable de Morón.
+   */
+
+  const comerciosUbicables =
     comerciosMostrar.filter(
-      comercio =>
-        tieneCoordenadas(
-          comercio
-        )
+      tieneCoordenadasValidas
     );
 
 
-  comerciosConCoordenadas
+  const noUbicables =
+    comerciosMostrar.length -
+    comerciosUbicables.length;
+
+
+  comerciosUbicables
     .forEach(
       comercio => {
-
-        const beneficios =
-          beneficiosVisibles(
-            comercio
-          );
-
-
-        const beneficiosPopup =
-          beneficios
-            .map(
-              beneficio => {
-
-                const programa =
-                  programaPorId(
-                    beneficio.programa
-                  );
-
-
-                return `
-
-                  <div
-                    style="margin-top:8px"
-                  >
-
-                    <small>
-                      ${
-                        programa
-                          ? programa.nombre
-                          : ''
-                      }
-                    </small>
-
-                    <br>
-
-                    <b>
-                      ${
-                        beneficio.beneficio ||
-                        ''
-                      }
-                    </b>
-
-                  </div>
-
-                `;
-
-              }
-            )
-            .join('');
-
-
         const marcador =
           L.marker(
             [
@@ -1868,30 +1976,18 @@ function actualizarMapa(
               mapa
             )
             .bindPopup(
-              `
-
-                <strong>
-                  ${comercio.nombre}
-                </strong>
-
-                <br>
-
-                ${comercio.rubro || ''}
-
-                ${beneficiosPopup}
-
-              `
+              contenidoPopupMapa(
+                comercio
+              )
             );
 
 
         marcador.on(
           'click',
           () => {
-
             registrarEvento(
               'marcador_abierto',
               {
-
                 programa:
                   programaSeleccionado,
 
@@ -1903,10 +1999,8 @@ function actualizarMapa(
 
                 localidad:
                   comercio.localidad,
-
               }
             );
-
           }
         );
 
@@ -1914,23 +2008,111 @@ function actualizarMapa(
         marcadores.push(
           marcador
         );
-
       }
     );
 
 
+  /* ===================================================
+     CONTADOR DEL MAPA
+  =================================================== */
+
+  contadorMapaControl =
+    L.control({
+      position:
+        'topright',
+    });
+
+
+  contadorMapaControl.onAdd =
+    function () {
+      const div =
+        L.DomUtil.create(
+          'div'
+        );
+
+
+      div.style.background =
+        'rgba(255,255,255,.96)';
+
+      div.style.padding =
+        '7px 10px';
+
+      div.style.borderRadius =
+        '8px';
+
+      div.style.boxShadow =
+        '0 1px 5px rgba(0,0,0,.25)';
+
+      div.style.fontSize =
+        '12px';
+
+      div.style.fontWeight =
+        '700';
+
+      div.style.lineHeight =
+        '1.35';
+
+      div.style.color =
+        '#333';
+
+
+      div.innerHTML = `
+
+        📍
+        ${
+          comerciosUbicables.length
+        }
+        ${
+          comerciosUbicables.length ===
+          1
+            ? 'comercio'
+            : 'comercios'
+        }
+
+        ${
+          noUbicables > 0
+            ? `
+              <br>
+
+              <span
+                style="
+                  font-weight:400;
+                  font-size:11px;
+                  color:#666;
+                "
+              >
+                ${noUbicables}
+                sin ubicación válida
+              </span>
+            `
+            : ''
+        }
+
+      `;
+
+
+      return div;
+    };
+
+
+  contadorMapaControl.addTo(
+    mapa
+  );
+
+
+  /* ===================================================
+     ENCUADRAR MARCADORES
+  =================================================== */
+
   if (
-    comerciosConCoordenadas.length &&
+    comerciosUbicables.length &&
     !ubicacionUsuario
   ) {
-
     const bounds =
       L.latLngBounds(
-
-        comerciosConCoordenadas
+        comerciosUbicables
           .map(
             comercio => [
-
               Number(
                 comercio.lat
               ),
@@ -1938,36 +2120,32 @@ function actualizarMapa(
               Number(
                 comercio.lng
               ),
-
             ]
           )
-
       );
 
 
     mapa.fitBounds(
       bounds,
       {
+        padding: [
+          30,
+          30,
+        ],
 
-        padding:
-          [
-            30,
-            30,
-          ],
-
-        maxZoom:
-          14,
-
+        maxZoom: 14,
       }
     );
-
   }
 
+
+  /* ===================================================
+     UBICACIÓN DEL USUARIO
+  =================================================== */
 
   if (
     ubicacionUsuario
   ) {
-
     marcadorUsuario =
       L.circleMarker(
         [
@@ -1975,8 +2153,7 @@ function actualizarMapa(
           ubicacionUsuario.lng,
         ],
         {
-          radius:
-            9,
+          radius: 9,
         }
       )
         .addTo(
@@ -1994,40 +2171,49 @@ function actualizarMapa(
       ],
       14
     );
-
   }
 
+
+  console.log(
+    'Mapa Morón te acompaña',
+    {
+      resultados:
+        comerciosMostrar.length,
+
+      marcadores:
+        comerciosUbicables.length,
+
+      sinUbicacionValida:
+        noUbicables,
+    }
+  );
 }
 
 
 /* =====================================================
-   DETALLE COMERCIO
+   DETALLE
 ===================================================== */
 
-function abrirDetalle(
-  id
-) {
-
+function abrirDetalle(id) {
   const comercio =
     comercios.find(
       comercio =>
-        comercio.id === id
+        Number(
+          comercio.id
+        ) === Number(id)
     );
 
 
   if (
     !comercio
   ) {
-
     return;
-
   }
 
 
   registrarEvento(
     'detalle_comercio',
     {
-
       programa:
         programaSeleccionado,
 
@@ -2039,7 +2225,6 @@ function abrirDetalle(
 
       localidad:
         comercio.localidad,
-
     }
   );
 
@@ -2062,10 +2247,121 @@ function abrirDetalle(
     );
 
 
-  const poseeCoordenadas =
-    tieneCoordenadas(
+  if (
+    !modal ||
+    !contenido
+  ) {
+    return;
+  }
+
+
+  const beneficiosHtml =
+    beneficios
+      .map(
+        beneficio => {
+          const programa =
+            programaPorId(
+              beneficio.programa
+            );
+
+
+          return `
+
+            <div
+              class="modal-benefit"
+            >
+
+              <small>
+                ${
+                  escaparHtml(
+                    programa
+                      ? programa.nombre
+                      : 'Beneficio'
+                  )
+                }
+              </small>
+
+              <strong>
+                ${
+                  escaparHtml(
+                    beneficio
+                      .beneficio ||
+                    ''
+                  )
+                }
+              </strong>
+
+              ${
+                beneficio.condiciones
+                  ? `
+                    <p>
+                      ${
+                        escaparHtml(
+                          beneficio
+                            .condiciones
+                        )
+                      }
+                    </p>
+                  `
+                  : ''
+              }
+
+            </div>
+
+          `;
+        }
+      )
+      .join('');
+
+
+  const ubicacionValida =
+    tieneCoordenadasValidas(
       comercio
     );
+
+
+  const rutaHtml =
+    ubicacionValida
+      ? `
+
+        <a
+          class="route-button"
+          target="_blank"
+          rel="noopener"
+          href="https://www.google.com/maps/dir/?api=1&destination=${
+            Number(
+              comercio.lat
+            )
+          },${
+            Number(
+              comercio.lng
+            )
+          }"
+          id="como-llegar"
+        >
+
+          Cómo llegar
+
+          <span>
+            →
+          </span>
+
+        </a>
+
+      `
+      : `
+
+        <div
+          class="route-button"
+          style="
+            opacity:.55;
+            pointer-events:none;
+          "
+        >
+          Ubicación pendiente
+        </div>
+
+      `;
 
 
   contenido.innerHTML = `
@@ -2079,132 +2375,71 @@ function abrirDetalle(
     </button>
 
 
-    <span class="category-badge">
-      ${comercio.rubro || 'Comercio'}
+    <span
+      class="category-badge"
+    >
+      ${
+        escaparHtml(
+          comercio.rubro ||
+          'Comercio'
+        )
+      }
     </span>
 
 
     <h2>
-      ${comercio.nombre}
+      ${
+        escaparHtml(
+          comercio.nombre
+        )
+      }
     </h2>
 
 
-    <p class="modal-address">
+    <p
+      class="modal-address"
+    >
 
       📍
+      ${
+        escaparHtml(
+          comercio.direccion ||
+          'Dirección pendiente'
+        )
+      }
 
       ${
-        [
-          comercio.direccion,
-          comercio.localidad,
-        ]
-          .filter(Boolean)
-          .join(' · ')
+        comercio.localidad
+          ? `
+            <br>
+            ${
+              escaparHtml(
+                comercio.localidad
+              )
+            }
+          `
+          : ''
       }
 
     </p>
 
 
-    <div class="modal-section">
+    <div
+      class="modal-section"
+    >
 
-      <span class="modal-label">
+      <span
+        class="modal-label"
+      >
         BENEFICIOS DISPONIBLES
       </span>
 
-
-      ${
-        beneficios
-          .map(
-            beneficio => {
-
-              const programa =
-                programaPorId(
-                  beneficio.programa
-                );
-
-
-              return `
-
-                <div
-                  class="modal-benefit"
-                >
-
-                  <small>
-                    ${
-                      programa
-                        ? programa.nombre
-                        : ''
-                    }
-                  </small>
-
-                  <strong>
-                    ${
-                      beneficio.beneficio ||
-                      'Beneficio disponible'
-                    }
-                  </strong>
-
-                  ${
-                    beneficio.condiciones
-                      ? `
-
-                        <p>
-                          ${beneficio.condiciones}
-                        </p>
-
-                      `
-                      : ''
-                  }
-
-                </div>
-
-              `;
-
-            }
-          )
-          .join('')
-      }
+      ${beneficiosHtml}
 
     </div>
 
 
-    ${
-      poseeCoordenadas
-        ? `
-
-          <a
-            class="route-button"
-            target="_blank"
-            rel="noopener"
-            href="https://www.google.com/maps/dir/?api=1&destination=${
-              comercio.lat
-            },${
-              comercio.lng
-            }"
-            id="como-llegar"
-          >
-
-            Cómo llegar
-
-            <span>
-              →
-            </span>
-
-          </a>
-
-        `
-        : `
-
-          <p
-            class="modal-address"
-            style="margin-top:20px"
-          >
-            La ubicación en el mapa está
-            pendiente de confirmar.
-          </p>
-
-        `
-    }
+    ${rutaHtml}
 
   `;
 
@@ -2226,60 +2461,63 @@ function abrirDetalle(
 
   modal.onclick =
     event => {
-
       if (
-        event.target ===
-        modal
+        event.target === modal
       ) {
-
         cerrarModal();
-
       }
-
     };
 
 
   if (
-    poseeCoordenadas
+    ubicacionValida
   ) {
-
-    document
-      .querySelector(
+    const botonRuta =
+      document.querySelector(
         '#como-llegar'
-      )
-      ?.addEventListener(
-        'click',
-        () => {
-
-          registrarEvento(
-            'como_llegar',
-            {
-
-              programa:
-                programaSeleccionado,
-
-              comercio_id:
-                comercio.id,
-
-              rubro:
-                comercio.rubro,
-
-              localidad:
-                comercio.localidad,
-
-            }
-          );
-
-        }
       );
 
-  }
 
+    botonRuta?.addEventListener(
+      'click',
+      () => {
+        registrarEvento(
+          'como_llegar',
+          {
+            programa:
+              programaSeleccionado,
+
+            comercio_id:
+              comercio.id,
+
+            rubro:
+              comercio.rubro,
+
+            localidad:
+              comercio.localidad,
+          }
+        );
+      }
+    );
+  }
 }
 
 
-function cerrarModal() {
+/*
+ * Permite que el botón
+ * del popup de Leaflet
+ * abra el mismo detalle.
+ */
 
+window.mtaAbrirDetalle =
+  abrirDetalle;
+
+
+/* =====================================================
+   CERRAR MODAL
+===================================================== */
+
+function cerrarModal() {
   const modal =
     document.querySelector(
       '#modal'
@@ -2289,13 +2527,10 @@ function cerrarModal() {
   if (
     modal
   ) {
-
     modal.classList.add(
       'hidden'
     );
-
   }
-
 }
 
 
@@ -2304,18 +2539,14 @@ function cerrarModal() {
 ===================================================== */
 
 function solicitarUbicacion() {
-
   if (
     !navigator.geolocation
   ) {
-
     alert(
       'Tu dispositivo no permite utilizar ubicación.'
     );
 
-
     return;
-
   }
 
 
@@ -2323,26 +2554,20 @@ function solicitarUbicacion() {
     .getCurrentPosition(
 
       posicion => {
-
         ubicacionUsuario = {
-
           lat:
-            posicion
-              .coords
+            posicion.coords
               .latitude,
 
           lng:
-            posicion
-              .coords
+            posicion.coords
               .longitude,
-
         };
 
 
         registrarEvento(
           'cerca_mio',
           {
-
             programa:
               programaSeleccionado,
 
@@ -2351,18 +2576,15 @@ function solicitarUbicacion() {
 
             localidad:
               localidadSeleccionada,
-
           }
         );
 
 
         renderExplorar();
-
       },
 
 
       () => {
-
         registrarEvento(
           'ubicacion_rechazada',
           {
@@ -2375,22 +2597,18 @@ function solicitarUbicacion() {
         alert(
           'No pudimos acceder a tu ubicación. Podés seguir buscando manualmente.'
         );
-
       },
 
 
       {
-
         enableHighAccuracy:
           false,
 
         timeout:
           10000,
-
       }
 
     );
-
 }
 
 
@@ -2415,14 +2633,11 @@ renderHome();
 ===================================================== */
 
 if (
-  'serviceWorker'
-  in navigator
+  'serviceWorker' in navigator
 ) {
-
   window.addEventListener(
     'load',
     () => {
-
       navigator
         .serviceWorker
         .register(
@@ -2430,16 +2645,12 @@ if (
         )
         .catch(
           error => {
-
             console.log(
               'Service Worker:',
               error
             );
-
           }
         );
-
     }
   );
-
 }
