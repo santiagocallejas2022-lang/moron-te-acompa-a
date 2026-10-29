@@ -5031,6 +5031,36 @@ function renderResultado() {
   }
 
 
+  /*
+    Guardamos la posición actual antes
+    de volver a dibujar el analizador.
+
+    Esto evita que al resolver,
+    separar, unir, editar o excluir
+    un comercio vuelva arriba.
+  */
+
+  const posicionScroll = {
+
+    overlay:
+      contenedor.scrollTop ||
+      0,
+
+    modal:
+      contenedor
+        .querySelector(
+          '.imp-modal'
+        )
+        ?.scrollTop ||
+      0,
+
+    ventana:
+      window.scrollY ||
+      0,
+
+  };
+
+
   const pendientesArchivo =
     paresPendientes();
 
@@ -5201,54 +5231,6 @@ function renderResultado() {
 
 
       ${
-        unionesAutomaticas
-          ? `
-
-            <div class="imp-result-section">
-
-              <div class="imp-section-title">
-
-                <h3>
-                  Uniones automáticas
-                </h3>
-
-                <p>
-                  Estas coincidencias son seguras.
-                  Si alguna no corresponde, podés
-                  crearla por separado antes de importar.
-                </p>
-
-              </div>
-
-
-              <div class="imp-detection-list">
-
-                ${
-                  analisis.grupos
-                    .filter(
-                      grupo =>
-                        !grupo.omitir &&
-                        grupo.base &&
-                        grupo.decisionBase ===
-                          'unir' &&
-                        grupo.unionAutomatica
-                    )
-                    .map(
-                      renderUnionAutomatica
-                    )
-                    .join('')
-                }
-
-              </div>
-
-            </div>
-
-          `
-          : ''
-      }
-
-
-      ${
         sinCoordenadas
           ? `
 
@@ -5262,12 +5244,13 @@ function renderResultado() {
 
               </strong>
 
-              Se pueden importar igual y
-              <b>aparecerán en la lista pública</b>.
+              Se pueden importar igual,
+              pero los comercios nuevos
+              quedarán
+              <b>inactivos</b>
+              para no romper el mapa público.
 
-              Hasta que tengan latitud y longitud,
-              no aparecerán como punto en el mapa
-              ni se usarán para calcular cercanía.
+              Después los ubicamos y activamos.
 
             </div>
 
@@ -5644,8 +5627,44 @@ function renderResultado() {
 
   conectarResultado();
 
-}
 
+  /*
+    El HTML ya se volvió a generar.
+    Esperamos al siguiente frame
+    y restauramos la posición anterior.
+  */
+
+  requestAnimationFrame(
+    () => {
+
+      contenedor.scrollTop =
+        posicionScroll.overlay;
+
+
+      const modal =
+        contenedor
+          .querySelector(
+            '.imp-modal'
+          );
+
+
+      if (modal) {
+
+        modal.scrollTop =
+          posicionScroll.modal;
+
+      }
+
+
+      window.scrollTo(
+        0,
+        posicionScroll.ventana
+      );
+
+    }
+  );
+
+}
 
 /* =========================================================
    EDITAR COMERCIO
