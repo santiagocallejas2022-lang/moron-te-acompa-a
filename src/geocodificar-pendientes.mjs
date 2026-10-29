@@ -249,7 +249,6 @@ console.log('\n==============================');
 console.log(`LISTOS PARA ACTUALIZAR: ${listos.length}`);
 console.log(`PARA REVISAR: ${revisar.length}`);
 console.log('==============================');
-
 console.log('\n✅ actualizar-coordenadas.sql');
 console.log('✅ coordenadas-revisar.json');
 console.log('\nNO EJECUTES TODAVÍA EL SQL.');
